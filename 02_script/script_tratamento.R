@@ -1,11 +1,7 @@
 
 library(tidyverse)
 
-load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2014_2016.RData")
 load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2021_2023.RData")
-load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc17_18.RData")
-load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc19-20.RData")
-
 
 dados21_23 <- 
   dados_completos |> 
@@ -22,6 +18,7 @@ dados21_23 <-
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
          VD3004, VD3005, VD4010, VD4011)
 
+load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc19-20.RData")
 
 dados19_20 <- 
   dados_completos |> 
@@ -38,6 +35,8 @@ dados19_20 <-
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
          VD3004, VD3005, VD4010, VD4011)
 
+load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc17_18.RData")
+
 dados17_18 <- 
   dados_completos |> 
   select(Ano, Trimestre, UF, Capital, RM_RIDE, 
@@ -53,7 +52,7 @@ dados17_18 <-
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
          VD3004, VD3005, VD4010, VD4011)
 
-
+load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2014_2016.RData")
 
 dados14_16 <- 
   dados_completos |> 
@@ -96,7 +95,7 @@ pnadc <-
     mutate(genero = if_else(V2007 == "Homem", "01", "00")) |> 
     mutate(id = paste0(UPA, Estrato, V2008, V1008,
                       V20081, V20082, genero,
-                      sep = ""))
+                      sep = ""), .before = Ano)
 
 ## Pegando pessoas que atuaram pelo menos uma vez como TCP
 ## ou como trabalho principal ou secundário
@@ -143,3 +142,25 @@ vetor_tcp5 <- unique(id_pnadc_trimestres$id)
 tcp_5trim <- 
   pnadc_tcp_todos |> 
   filter(id %in% vetor_tcp5)
+
+# write.csv(tcp_5trim,"tcp_5trimestres.csv")
+
+# Pegando apenas pessoas que tiveram 8 entrevistas ou mais 
+
+id_pnadc_7_trimestres <- 
+  pnadc_tcp_todos |> 
+  group_by(id) |> 
+  count() |> 
+  filter(n > 7)
+
+vetor_tcp7 <- unique(id_pnadc_7_trimestres$id)
+
+
+## Vamos manter apenas os tcp que possuem mais de 
+## de sete. Portanto, foram mantidos tcp_7trim. 
+
+tcp_7trim <- 
+  pnadc_tcp_todos |> 
+  filter(id %in% vetor_tcp7)
+
+write.csv(tcp_7trim,"tcp_8trimestres.csv")
