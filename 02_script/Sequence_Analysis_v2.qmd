@@ -40,7 +40,7 @@ data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, 
 
 #criando a variável ID_UNICO
 data <- data %>%
-  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082, genero, Estrato, V2007, V2010, sep = "_")) %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082, genero, Estrato, sep = "_")) %>%
   relocate(ID_UNICO, .before = Capital)
 
 #Criando a variável Trimestre_Ano
@@ -159,6 +159,10 @@ data_wide <- data_wide %>%
 # Retirando que não atuaram como Conta Própria
 data_final <- data_wide %>%
   filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_temporario <- data_final %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
 ```
 
 ### 1.2 Resultados
@@ -268,6 +272,10 @@ data_wide_secundario$ID_INDEX <- as.numeric(factor(data_wide_secundario$ID_UNICO
 # Retirando que não atuaram como Conta Própria
 data_final_secundario <- data_wide_secundario %>%
   filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_secundario_temporario <- data_final_secundario %>%
+  filter(rowSums(across(2:6, ~ . == "CP")) < 5)
 ```
 
 ### 2.2 Resultados
@@ -465,6 +473,10 @@ data_wide_completo <- data_wide_completo %>%
 # Retirando que não atuaram como Conta Própria
 data_final_completo <- data_wide_completo %>%
   filter(rowSums(across(3:7, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_completo_temporario <- data_final_completo %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
 ```
 
 ### 4.2 Resultados
@@ -562,6 +574,10 @@ data_wide_completo_sec <- data_wide_completo_sec %>%
 # Retirando que não atuaram como Conta Própria
 data_final_completo_sec <- data_wide_completo_sec %>%
   filter(rowSums(across(3:7, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_completo_sec_temporario <- data_final_completo_sec %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
 ```
 
 ### 5.2 Resultados
