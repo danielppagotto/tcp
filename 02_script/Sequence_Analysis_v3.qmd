@@ -45,7 +45,7 @@ Em seguida, importaremos a base gerada anteriormente e aplicaremos algumas trans
 
 ```{r}
 #abrindo a base
-data <- read.csv("tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
 
 #criando a variável ID_UNICO
 data <- data %>%
@@ -182,6 +182,7 @@ Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequên
 
 ```{r}
 #Definindo as variáveis temporais, ou os "Estados"
+actcal.seq <- seqdef(data_final, var = 3:7)
 
 
 
