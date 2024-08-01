@@ -1,0 +1,159 @@
+---
+title: "teste"
+format: html
+editor: visual
+---
+
+## Sequence Analysis
+
+Anteriormente (em outro script), foi levantado dados da Pnad Contínua referente a todos os trimestres entre 2014 e 2023. E filtrado apenas aqueles domicílios que excerceram trabalho como "Conta própria" ao menos uma vez durante as 5 amostragens em que foram submetidos, seja como trabalho principal ou secundário. Isso resultou em 2.392.205 observações.
+
+A partir dessa base gerada, procederemos ao tratamento dos dados para aplicar a Análise de Sequências (Sequence Analysis), com recortes para diferentes períodos:
+
+-   2017 - 2019 (pré-pandemia);
+
+-   2020 - 2021 (período pandêmico);
+
+-   2022 - 2023 (pós-pandemia);
+
+Primeiramente carregaremos as bibliotecas necessárias junta com a base de dados, e em seguida, criaremos a variável que irá identificar o indíviduo de forma que ele possa ser acompanhado durantes as 5 entrevistas. Além disso, adicionaremos uma variável conjulgando o trimestre e ano separados por "-".
+
+```{r}
+#| warning: false
+
+options(scipen = 999)
+
+# install.packages("TraMineR")
+library(TraMineR)
+library(tidyverse)
+library(cluster)
+library(TraMineRextras)
+library(WeightedCluster)
+library(FactoMineR)
+library(ade4)
+library(RColorBrewer)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(seqhandbook)
+library(stringr)
+
+
+#abrindo a base
+data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+
+#criando a variável ID_UNICO
+data <- data %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082, genero, Estrato, sep = "_")) %>%
+  relocate(ID_UNICO, .before = Capital)
+
+#Criando a variável Trimestre_Ano
+data <- data %>%
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, sep = "-"), .before = UF)
+```
+
+### 1. Análise de sequência: pré-pandemia.
+
+O primeira análise a ser realizada será no período pré-pandemia (2017-2019). Para isso, trataremos os dados para tal recorte, e aplicaremos a análise de sequência e realizaremos a clusterização dos indíviduos.
+
+#### 1.1. Tratamento dos dados.
+
+Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
+
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
+| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação       |
++===========================================================================================================+:===================================:+:================:+
+| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR             |
+|                                                                                                           |                                     |                  |
+| -   Trabalhador doméstico.                                                                                |                                     |                  |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
+| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU             |
+|                                                                                                           |                                     |                  |
+| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |                  |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
+| -   Conta própria.                                                                                        | Conta própria                       | CP               |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
+| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR             |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
+
+```{r}
+
+#Filtrando os anos de análise
+data_pre_pandemia <- data |> 
+  filter(Ano == 2017 | Ano == 2018 | Ano == 2019)
+
+
+#Reclassificando  as condições de ocupações
+data_pre_pandemia <- data_pre_pandemia |> 
+  mutate(V4012_ajust = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Trabalhador doméstico" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPU",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    V4012 == "Empregador" ~ "EMP",
+    TRUE ~ V4012  # Mantém o valor original para outros casos
+  ), .after = Ano)
+
+
+#Agregando a condição de desocupado
+data_pre_pandemia <- data_pre_pandemia %>%
+  mutate(ocupacao = ifelse(VD4002 == "Pessoas ocupadas", 
+                                V4012_ajust, 
+                                ifelse(VD4002 == "Pessoas desocupadas", 
+                                       "Desocupado", 
+                                       V4012_ajust)), .after = V4012_ajust)
+```
+
+Abaixo, serão selecionadas apenas as variáveis de interesse, além da recém-criada ocupacao, V1016 (número da entrevista) e ID_UNICO, que serão suficientes para a análise de sequências.
+
+Com isso, transforaremos a estrutura de dados longo para largo, condição necessária para o pacote TraMineR.
+
+```{r}
+
+data_pre_pandemia <- data_pre_pandemia |> 
+  select(ID_UNICO, V1016, ocupacao)
+
+data_pre_pandemia_wide <- data_pre_pandemia |> 
+  pivot_wider(names_from = V1016, values_from = ocupacao)
+
+#Alterando o formato das variáveis temporais
+data_pre_pandemia_wide <- data_pre_pandemia_wide |> 
+  mutate(`1` = as.character(`1`)) |> 
+  mutate(`2` = as.character(`2`)) |> 
+  mutate(`3` = as.character(`3`)) |> 
+  mutate(`4` = as.character(`4`)) |> 
+  mutate(`5` = as.character(`5`))
+
+#Ordenando as variáveis temporais
+data_pre_pandemia_wide <- data_pre_pandemia_wide |>
+  relocate(`4`, .before = `5`) |> 
+  relocate(`3`, .before = `4`) |> 
+  relocate(`2`, .before = `3`) |> 
+  relocate(`1`, .before = `2`)
+
+data_pre_pandemia_wide
+```
+
+Observa-se que muitos valores "null" e missings foram gerados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2017 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 63.005 indivíduos).
+
+```{r}
+#Contagem da quantidade de pessoas que não completaram as 5 entrevistas no período de referência
+contagem_nulls <- data_pre_pandemia_wide %>%
+  filter(str_to_lower(`1`) == "null" | 
+         str_to_lower(`2`) == "null" | 
+         str_to_lower(`3`) == "null" | 
+         str_to_lower(`4`) == "null" | 
+         str_to_lower(`5`) == "null") %>%
+  summarise(quantidade = n_distinct(ID_UNICO))
+
+#Removendo valores Null
+teste <- data_pre_pandemia_wide |> 
+  filter_at(vars(2:6), all_vars(. != "NULL"))
+  
+
+contagem_na <- data_pre_pandemia_wide %>%
+  filter(is.na(`1`) | is.na(`2`) | is.na(`3`) | is.na(`4`) | is.na(`5`)) %>%
+  summarise(quantidade = n_distinct(ID_UNICO))
+```
