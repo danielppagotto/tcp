@@ -60,27 +60,27 @@ O primeira análise a ser realizada será no período pré-pandemia (2017-2019).
 
 Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
 
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
-| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação       |
-+===========================================================================================================+:===================================:+:================:+
-| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR             |
-|                                                                                                           |                                     |                  |
-| -   Trabalhador doméstico.                                                                                |                                     |                  |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
-| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU             |
-|                                                                                                           |                                     |                  |
-| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |                  |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
-| -   Conta própria.                                                                                        | Conta própria                       | CP               |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
-| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR             |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------------+
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
++===========================================================================================================+:===================================:+:==========:+
+| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR       |
+|                                                                                                           |                                     |            |
+| -   Trabalhador doméstico.                                                                                |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU       |
+|                                                                                                           |                                     |            |
+| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Conta própria.                                                                                        | Conta própria                       | CP         |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR       |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
 
 ```{r}
 
 #Filtrando os anos de análise
 data_pre_pandemia <- data |> 
-  filter(Ano == 2017 | Ano == 2018 | Ano == 2019)
+  filter(Ano == 2018 | Ano == 2019)
 
 
 #Reclassificando  as condições de ocupações
@@ -136,9 +136,21 @@ data_pre_pandemia_wide <- data_pre_pandemia_wide |>
 data_pre_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2017 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 63.005 indivíduos).
+Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 52.718, que no código abaixo serão filtrados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2017 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 83.658 indivíduos).
+
+E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 2.142 remoções). Restando uma uma base para a análise de sequências de 37.376 indivíduos.
 
 ```{r}
+#Contagem de valores ausentes
+contagem_na <- data_pre_pandemia_wide %>%
+  filter(is.na(`1`) | is.na(`2`) | is.na(`3`) | is.na(`4`) | is.na(`5`)) %>%
+  summarise(quantidade = n_distinct(ID_UNICO))
+
+#Excluindo valores ausentes
+data_pre_pandemia_wide <- data_pre_pandemia_wide |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+
 #Contagem da quantidade de pessoas que não completaram as 5 entrevistas no período de referência
 contagem_nulls <- data_pre_pandemia_wide %>%
   filter(str_to_lower(`1`) == "null" | 
@@ -149,11 +161,50 @@ contagem_nulls <- data_pre_pandemia_wide %>%
   summarise(quantidade = n_distinct(ID_UNICO))
 
 #Removendo valores Null
-teste <- data_pre_pandemia_wide |> 
+data_pre_pandemia_wide <- data_pre_pandemia_wide |> 
   filter_at(vars(2:6), all_vars(. != "NULL"))
-  
 
-contagem_na <- data_pre_pandemia_wide %>%
-  filter(is.na(`1`) | is.na(`2`) | is.na(`3`) | is.na(`4`) | is.na(`5`)) %>%
-  summarise(quantidade = n_distinct(ID_UNICO))
+# Retirando que não atuaram como Conta Própria
+data_pre_pandemia_wide <- data_pre_pandemia_wide %>%
+  filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+```
+
+#### 1.2. Resultados.
+
+Agora que temos a base tratada, iremos utiliza-la para gerar os gráficos do Sequence Analysis. Primeiramente, iremos definir as variáveis temporais na função seqdef, para que as demais funções reconheça as variáveis temporais.
+
+Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequências do dataframe. O segundo gráfico irá mostrar a frequência relativa de cada observação distinta durante as 5 entrevistas. O terceiro gráfico conterá todas as sequências da base de dados. E por último, as 10 sequências mais frequentes com suas referidas participações relativas.
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq <- seqdef(data_pre_pandemia_wide, var = 2:6)
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq, with.legend = "right")
+```
+
+```{r}
+#Exibindo as frequências relativas dos grupos
+seqdplot(actcal.seq, with.legend = "right", border = NA)
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq, with.legend = "right")
+```
+
+#### 1.3. Clusterização dos resultados.
+
+```{r}
+# Para construção da matriz de dissimilaridades
+ 
+couts <- seqsubm(actcal.seq, method="CONSTANT", cval=2)
+dissim <- seqdist(actcal.seq, method="OM", sm=couts, indel=1.5)
+
+agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
 ```
