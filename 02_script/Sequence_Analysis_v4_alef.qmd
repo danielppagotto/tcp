@@ -178,7 +178,7 @@ Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequên
 
 ```{r}
 #Definindo as variáveis temporais, ou os "Estados"
-actcal.seq <- seqdef(data_pre_pandemia_wide, var = 2:6)
+actcal.seq <- seqdef(data_pre_pandemia_wide, var = 3:7)
 
 #Exibindo apenas 10 sequências
 seqiplot(actcal.seq, with.legend = "right")
@@ -224,7 +224,7 @@ as.dendrogram(agnes) %>% plot(leaflab="none")
 seq_heatmap(actcal.seq, agnes)
 ```
 
-Abaixo, será definido o número de clustering. E por fim, será gerado um gráfico de índices para cada clustering definido.
+Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
 # Escolher sete clustering (A árvore será cortada, formar 4)
@@ -232,11 +232,29 @@ Abaixo, será definido o número de clustering. E por fim, será gerado um gráf
 nbcl <- 4
 part <- cutree(agnes, nbcl)
 
-# Gráfico
+#Inserindo a variável de cluster
+data_pre_pandemia_wide$cluster <- part
+
+# Gráfico (Frequência Relativa) 
 
 png("seu_grafico.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
+
+# Gráfico de Índices 
+
+png("seu_grafico2.png", width = 800, height = 600)
+seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+
+# Gráfico de frequências mais representativas
+
+png("seu_grafico3.png", width = 800, height = 600)
+seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+
 ```
 
 ### 2. Análise de sequência: pandemia.
@@ -411,7 +429,7 @@ as.dendrogram(agnes) %>% plot(leaflab="none")
 seq_heatmap(actcal.seq, agnes)
 ```
 
-Abaixo, será definido o número de clustering. E por fim, será gerado um gráfico de índices para cada clustering definido.
+Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
 # Escolher sete clustering (A árvore será cortada, formar 4)
@@ -419,10 +437,25 @@ Abaixo, será definido o número de clustering. E por fim, será gerado um gráf
 nbcl <- 4
 part <- cutree(agnes, nbcl)
 
-# Gráfico
+data_pandemia_wide$cluster <- part
+
+# Gráfico (Frequência relativa)
 
 png("seu_grafico.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+# Gráfico de Índices 
+
+png("seu_grafico2.png", width = 800, height = 600)
+seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+
+# Gráfico de frequências mais representativas
+
+png("seu_grafico3.png", width = 800, height = 600)
+seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 ```
 
@@ -434,21 +467,21 @@ A terceira análise a ser realizada será no período pós-pandemia (2022-2023).
 
 Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
 
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+--------------+
-| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação   |
-+===========================================================================================================+:===================================:+:============:+
-| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR         |
-|                                                                                                           |                                     |              |
-| -   Trabalhador doméstico.                                                                                |                                     |              |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+--------------+
-| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU         |
-|                                                                                                           |                                     |              |
-| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |              |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+--------------+
-| -   Conta própria.                                                                                        | Conta própria                       | CP           |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+--------------+
-| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR         |
-+-----------------------------------------------------------------------------------------------------------+-------------------------------------+--------------+
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
++===========================================================================================================+:===================================:+:==========:+
+| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR       |
+|                                                                                                           |                                     |            |
+| -   Trabalhador doméstico.                                                                                |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU       |
+|                                                                                                           |                                     |            |
+| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Conta própria.                                                                                        | Conta própria                       | CP         |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR       |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
 
 ```{r}
 #Filtrando os anos de análise
@@ -597,7 +630,7 @@ as.dendrogram(agnes) %>% plot(leaflab="none")
 seq_heatmap(actcal.seq, agnes)
 ```
 
-Abaixo, será definido o número de clustering. E por fim, será gerado um gráfico de índices para cada clustering definido.
+Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
 # Escolher sete clustering (A árvore será cortada, formar 4)
@@ -605,9 +638,24 @@ Abaixo, será definido o número de clustering. E por fim, será gerado um gráf
 nbcl <- 4
 part <- cutree(agnes, nbcl)
 
-# Gráfico
+data_pos_pandemia_wide$cluster <- part
+
+# Gráfico (Frequência relativa)
 
 png("seu_grafico.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+# Gráfico de Índices 
+
+png("seu_grafico2.png", width = 800, height = 600)
+seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+
+
+# Gráfico de frequências mais representativas
+
+png("seu_grafico3.png", width = 800, height = 600)
+seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 ```
