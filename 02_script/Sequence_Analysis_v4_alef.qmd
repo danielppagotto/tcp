@@ -237,20 +237,20 @@ data_pre_pandemia_wide$cluster <- part
 
 # Gráfico (Frequência Relativa) 
 
-png("seu_grafico.png", width = 800, height = 600)
+png("cluster_freq_pre.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 # Gráfico de Índices 
 
-png("seu_grafico2.png", width = 800, height = 600)
+png("cluster_ind_pre.png", width = 800, height = 600)
 seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
 # Gráfico de frequências mais representativas
 
-png("seu_grafico3.png", width = 800, height = 600)
+png("cluster_10freq_pre.png", width = 800, height = 600)
 seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
@@ -441,20 +441,20 @@ data_pandemia_wide$cluster <- part
 
 # Gráfico (Frequência relativa)
 
-png("seu_grafico.png", width = 800, height = 600)
+png("cluster_freq_pan.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 # Gráfico de Índices 
 
-png("seu_grafico2.png", width = 800, height = 600)
+png("cluster_ind_pan.png", width = 800, height = 600)
 seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
 # Gráfico de frequências mais representativas
 
-png("seu_grafico3.png", width = 800, height = 600)
+png("cluster_10freq_pan.png", width = 800, height = 600)
 seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 ```
@@ -642,20 +642,20 @@ data_pos_pandemia_wide$cluster <- part
 
 # Gráfico (Frequência relativa)
 
-png("seu_grafico.png", width = 800, height = 600)
+png("cluster_freq_pos.png", width = 800, height = 600)
 seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 # Gráfico de Índices 
 
-png("seu_grafico2.png", width = 800, height = 600)
+png("cluster_ind_pos.png", width = 800, height = 600)
 seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
 # Gráfico de frequências mais representativas
 
-png("seu_grafico3.png", width = 800, height = 600)
+png("cluster_10freq_pos.png", width = 800, height = 600)
 seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 ```
