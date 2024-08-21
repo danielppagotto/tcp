@@ -58,7 +58,7 @@ O primeira análise a ser realizada será no período pré-pandemia (2017-2019).
 
 #### 1.1. Tratamento dos dados.
 
-Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
+Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos as pessoas fora da força de trabalho (VD4001) e a condição de desocupado (VD4002) na análise.
 
 +-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
 | Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
@@ -97,13 +97,15 @@ data_pre_pandemia <- data_pre_pandemia |>
   ), .after = Ano)
 
 
-#Agregando a condição de desocupado
+#Agregando a condição de força da força de trabalho e desocupado
 data_pre_pandemia <- data_pre_pandemia %>%
-  mutate(ocupacao = ifelse(VD4002 == "Pessoas ocupadas", 
-                                V4012_ajust, 
-                                ifelse(VD4002 == "Pessoas desocupadas", 
-                                       "Desocupado", 
-                                       V4012_ajust)), .after = V4012_ajust)
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "PFFT"
+  ), .after = VD4002)
+
+
 ```
 
 Abaixo, serão selecionadas apenas as variáveis de interesse, além da recém-criada ocupacao, V1016 (número da entrevista) e ID_UNICO, que serão suficientes para a análise de sequências.
@@ -137,9 +139,9 @@ data_pre_pandemia_wide <- data_pre_pandemia_wide |>
 data_pre_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 52.718, que no código abaixo serão filtrados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2018 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 83.658 indivíduos).
+Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 55 que no código abaixo serão filtrados, são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2018 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 112.709 indivíduos).
 
-E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 2.142 remoções). Restando uma uma base para a análise de sequências de 37.376 indivíduos.
+E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 2.323 remoções). Restando uma uma base para a análise de sequências de 60.807 indivíduos.
 
 ```{r}
 #Contagem de valores ausentes
@@ -149,7 +151,7 @@ contagem_na <- data_pre_pandemia_wide %>%
 
 #Excluindo valores ausentes
 data_pre_pandemia_wide <- data_pre_pandemia_wide |> 
-  filter(!rowSums(is.na(across(2:6))))
+  filter(!rowSums(is.na(across(2:6))) > 0)
 
 
 #Contagem da quantidade de pessoas que não completaram as 5 entrevistas no período de referência
@@ -178,7 +180,7 @@ Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequên
 
 ```{r}
 #Definindo as variáveis temporais, ou os "Estados"
-actcal.seq <- seqdef(data_pre_pandemia_wide, var = 3:7)
+actcal.seq <- seqdef(data_pre_pandemia_wide, var = 2:6)
 
 #Exibindo apenas 10 sequências
 seqiplot(actcal.seq, with.legend = "right")
@@ -227,13 +229,12 @@ seq_heatmap(actcal.seq, agnes)
 Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
-# Escolher sete clustering (A árvore será cortada, formar 4)
+# Escolher 5 clustering (A árvore será cortada, formar 5)
 
-nbcl <- 4
-part <- cutree(agnes, nbcl)
+cluster <- cutree(agnes, k=5)
 
 #Inserindo a variável de cluster
-data_pre_pandemia_wide$cluster <- part
+data_pre_pandemia_wide$cluster <- cluster
 
 # Gráfico (Frequência Relativa) 
 
@@ -263,7 +264,7 @@ A segunda análise a ser realizada será no período pandêmico (2020-2021). Par
 
 #### 2.1. Tratamento dos dados.
 
-Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
+Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos as pessoas fora da força de trabalho (VD4001) e a condição de desocupado (VD4002) na análise.
 
 +-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
 | Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
@@ -302,13 +303,13 @@ data_pandemia <- data_pandemia |>
   ), .after = Ano)
 
 
-#Agregando a condição de desocupado
+#Agregando a condição de força da força de trabalho e desocupado
 data_pandemia <- data_pandemia %>%
-  mutate(ocupacao = ifelse(VD4002 == "Pessoas ocupadas", 
-                                V4012_ajust, 
-                                ifelse(VD4002 == "Pessoas desocupadas", 
-                                       "Desocupado", 
-                                       V4012_ajust)), .after = V4012_ajust)
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "PFFT"
+  ), .after = VD4002)
 ```
 
 Abaixo, serão selecionadas apenas as variáveis de interesse, além da recém-criada ocupacao, V1016 (número da entrevista) e ID_UNICO, que serão suficientes para a análise de sequências.
@@ -342,9 +343,9 @@ data_pandemia_wide <- data_pandemia_wide |>
 data_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 26.975, que no código abaixo serão filtrados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2020 e 2021, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 65.011 indivíduos).
+Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 22, que no código abaixo serão filtrados., são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2020 e 2021, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 86.564 indivíduos).
 
-E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 627 remoções). Restando uma uma base para a análise de sequências de 15.384 indivíduos.
+E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 677 remoções). Restando uma uma base para a análise de sequências de 21.399 indivíduos.
 
 ```{r}
 #Contagem de valores ausentes
@@ -416,7 +417,7 @@ E por fim, através da função as.dist e agnes, converteremos a matriz de dist�
 couts <- seqsubm(actcal.seq, method="CONSTANT", cval=2)
 dissim <- seqdist(actcal.seq, method="OM", sm=couts, indel=1.5)
 
-agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
+agnes <- hclust(as.dist(dissim), method = "ward.D")
 ```
 
 Em seguida, converteremos os resultados do clustering em um dendograma, que é uma estrutura de dados que representa graficamente a árvore de agrupamento hierárquico, onde cada junção de ramos (ou nó) indica a fusão de dois grupos ou sequências individuais. Isso será utilizado para gerar o gráfico de índices com o dendograma.
@@ -432,12 +433,11 @@ seq_heatmap(actcal.seq, agnes)
 Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
-# Escolher sete clustering (A árvore será cortada, formar 4)
+# Escolher cinco clustering (A árvore será cortada, formar 5)
 
-nbcl <- 4
-part <- cutree(agnes, nbcl)
+cluster <- cutree(agnes, k=5)
 
-data_pandemia_wide$cluster <- part
+data_pandemia_wide$cluster <- cluster
 
 # Gráfico (Frequência relativa)
 
@@ -465,7 +465,7 @@ A terceira análise a ser realizada será no período pós-pandemia (2022-2023).
 
 #### 3.1. Tratamento dos dados.
 
-Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos a condição de desocupado (VD4002) na análise.
+Primeiramente, através da variável Ano, filtraremos os anos de análise. Em seguida, reclassificaremos a variável V4012 (tipo de ocupação), de forma a agrega-la em um conjunto menor, conforme a tabela abaixo. E por fim, consideraremos as pessoas fora da força de trabalho (VD4001) e a condição de desocupado (VD4002) na análise.
 
 +-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
 | Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
@@ -503,13 +503,13 @@ data_pos_pandemia <- data_pos_pandemia |>
   ), .after = Ano)
 
 
-#Agregando a condição de desocupado
+#Agregando a condição de força da força de trabalho e desocupado
 data_pos_pandemia <- data_pos_pandemia %>%
-  mutate(ocupacao = ifelse(VD4002 == "Pessoas ocupadas", 
-                                V4012_ajust, 
-                                ifelse(VD4002 == "Pessoas desocupadas", 
-                                       "Desocupado", 
-                                       V4012_ajust)), .after = V4012_ajust)
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "PFFT"
+  ), .after = VD4002)
 ```
 
 Abaixo, serão selecionadas apenas as variáveis de interesse, além da recém-criada ocupacao, V1016 (número da entrevista) e ID_UNICO, que serão suficientes para a análise de sequências.
@@ -543,9 +543,9 @@ data_pos_pandemia_wide <- data_pos_pandemia_wide |>
 data_pos_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 33.144, que no código abaixo serão filtrados. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2022 e 2023, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 31.168 indivíduos).
+Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 28 que no código abaixo serão filtrados, são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2022 e 2023, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 37.737 indivíduos).
 
-E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 1.580 remoções). Restando uma uma base para a análise de sequências de 29.580 indivíduos.
+E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 1.722 remoções). Restando uma uma base para a análise de sequências de 50.749 indivíduos.
 
 ```{r}
 #Contagem de valores ausentes
@@ -617,7 +617,7 @@ E por fim, através da função as.dist e agnes, converteremos a matriz de dist�
 couts <- seqsubm(actcal.seq, method="CONSTANT", cval=2)
 dissim <- seqdist(actcal.seq, method="OM", sm=couts, indel=1.5)
 
-agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
+agnes <- hclust(as.dist(dissim), method = "ward.D")
 ```
 
 Em seguida, converteremos os resultados do clustering em um dendograma, que é uma estrutura de dados que representa graficamente a árvore de agrupamento hierárquico, onde cada junção de ramos (ou nó) indica a fusão de dois grupos ou sequências individuais. Isso será utilizado para gerar o gráfico de índices com o dendograma.
@@ -635,10 +635,9 @@ Abaixo, será definido o número de clustering, e será inserido na base como um
 ```{r}
 # Escolher sete clustering (A árvore será cortada, formar 4)
 
-nbcl <- 4
-part <- cutree(agnes, nbcl)
+cluster <- cutree(agnes, k=5)
 
-data_pos_pandemia_wide$cluster <- part
+data_pos_pandemia_wide$cluster <- cluster
 
 # Gráfico (Frequência relativa)
 
