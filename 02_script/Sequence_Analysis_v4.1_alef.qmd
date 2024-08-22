@@ -180,25 +180,28 @@ Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequên
 
 ```{r}
 #Definindo as variáveis temporais, ou os "Estados"
-actcal.seq <- seqdef(data_pre_pandemia_wide, var = 2:6)
+aggMvad <- wcAggregateCases(data_pre_pandemia_wide[, 2:6])
+print(aggMvad)
+uniqueMvad <- data_pre_pandemia_wide[aggMvad$aggIndex, 2:6]
+mvad.seq <- seqdef(uniqueMvad, weights = aggMvad$aggWeights)
 
 #Exibindo apenas 10 sequências
-seqiplot(actcal.seq, with.legend = "right")
+seqiplot(mvad.seq, with.legend = "right")
 ```
 
 ```{r}
 #Exibindo as frequências relativas dos grupos
-seqdplot(actcal.seq, with.legend = "right", border = NA)
+seqdplot(mvad.seq, with.legend = "right", border = NA)
 ```
 
 ```{r}
 #Exibindo todas as sequências do dataframe (gráfico de índices)
-seqIplot(actcal.seq, sortv = "from.start", with.legend = "right")
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
 ```
 
 ```{r}
 #Exibindo as 10 sequências mais frequentes
-seqfplot(actcal.seq, with.legend = "right")
+seqfplot(mvad.seq, with.legend = "right")
 ```
 
 #### 1.3. Clusterização dos resultados.
@@ -210,25 +213,10 @@ E por fim, através da função as.dist e agnes, converteremos a matriz de dist�
 ```{r}
 # Para construção da matriz de dissimilaridades
  
-couts <- seqsubm(actcal.seq, method="CONSTANT", cval=2)
-dissim <- seqdist(actcal.seq, method="OM", sm=couts, indel=1.5)
-
+couts <- seqsubm(mvad.seq, method="CONSTANT", cval=2)
+dissim <- seqdist(mvad.seq, method="OM", sm=couts, indel=1.5)
 agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
 
-
-
-
-
-aggMvad <- wcAggregateCases(data_pre_pandemia_wide[, 2:6])
-print(aggMvad)
-
-uniqueMvad <- data_pre_pandemia_wide[aggMvad$aggIndex, 2:6]
-
-mvad.seq <- seqdef(uniqueMvad, weights = aggMvad$aggWeights)
-diss <- seqdist(mvad.seq, sm=couts ,method = "OM")
-
-
-pamClustRange <- wcKMedRange(diss, kvals = 2:10, weights = aggMvad$aggWeights)
 ```
 
 Em seguida, converteremos os resultados do clustering em um dendograma, que é uma estrutura de dados que representa graficamente a árvore de agrupamento hierárquico, onde cada junção de ramos (ou nó) indica a fusão de dois grupos ou sequências individuais. Isso será utilizado para gerar o gráfico de índices com o dendograma.
@@ -244,30 +232,39 @@ seq_heatmap(actcal.seq, agnes)
 Abaixo, será definido o número de clustering, e será inserido na base como uma nova variável. E por fim, será gerado um gráfico de frequência relativa, índices e sequências mais representativas para cada clustering definido.
 
 ```{r}
-# Escolher 5 clustering (A árvore será cortada, formar 5)
+# Método 1:
 
-cluster <- cutree(agnes, k=5)
-
-#Inserindo a variável de cluster
+part <- 5
+cluster <- cutree(agnes, k = 5)
+newpart <- wcKMedoids(dissim, k=part, initialclust=cluster, cluster.only=TRUE)
+part_1 <- as.numeric(as.factor(newpart))
+#Inserindo a variável de cluster (Verificar como fazer isso)
 data_pre_pandemia_wide$cluster <- cluster
+
+# Método 2:
+
+pamClustRange <- wcKMedRange(dissim, kvals = 5, weights = aggMvad$aggWeights)
+#Inserindo a variável de cluster
+uniqueCluster5  <-  pamClustRange$clustering$cluster5 
+data_pre_pandemia_wide$cluster5  <- uniqueCluster5[aggMvad$disaggIndex] 
 
 # Gráfico (Frequência Relativa) 
 
 png("cluster_freq_pre.png", width = 800, height = 600)
-seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+seqdplot(mvad.seq, group=part_1, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 # Gráfico de Índices 
 
 png("cluster_ind_pre.png", width = 800, height = 600)
-seqIplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+seqIplot(mvad.seq, group=pamClustRange$clustering$cluster5  , xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
 # Gráfico de frequências mais representativas
 
 png("cluster_10freq_pre.png", width = 800, height = 600)
-seqfplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+seqfplot(mvad.seq, group=part_1, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
