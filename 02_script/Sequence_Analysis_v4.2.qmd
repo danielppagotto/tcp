@@ -50,6 +50,10 @@ data <- data %>%
 #Criando a variável Trimestre_Ano
 data <- data %>%
   mutate(Trimestre_Ano = paste(Trimestre, Ano, sep = "-"), .before = UF)
+
+#Filtrando maiores de 14 anos
+data <- data |> 
+  filter(V2009 >= 14)
 ```
 
 ### 1. Análise de sequência: pré-pandemia.
@@ -139,7 +143,7 @@ data_pre_pandemia_wide <- data_pre_pandemia_wide |>
 data_pre_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 55 que no código abaixo serão filtrados, são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2018 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 112.709 indivíduos).
+Observa-se que muitos valores "null"foram gerados.. Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2018 e 2019, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 112.709 indivíduos).
 
 E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 2.323 remoções). Restando uma uma base para a análise de sequências de 60.807 indivíduos.
 
@@ -364,7 +368,7 @@ data_pandemia_wide <- data_pandemia_wide |>
 data_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 22, que no código abaixo serão filtrados., são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2020 e 2021, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 86.564 indivíduos).
+Observa-se que muitos valores "null". Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2020 e 2021, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 86.564 indivíduos).
 
 E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 677 remoções). Restando uma uma base para a análise de sequências de 21.399 indivíduos.
 
@@ -578,7 +582,7 @@ data_pos_pandemia_wide <- data_pos_pandemia_wide |>
 data_pos_pandemia_wide
 ```
 
-Observa-se que muitos valores "null" e missings foram gerados. A quantidade de indivíduos que apresentaram pelo menos um valor ausente durante as entrevistas totalizaram o valor de 28 que no código abaixo serão filtrados, são aqueles que não responderam a variável VD4001 (força de trabalho). Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2022 e 2023, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 37.737 indivíduos).
+Observa-se que muitos valores "null". Os valores "null" referem-se a indivíduos que não completaram as 5 entrevistas entre 2022 e 2023, ou aqueles que deixaram de responder alguma das sessões (esses valores totalizaram 37.737 indivíduos).
 
 E por fim, removeremos os indivíduos que não atuaram como conta própria em nenhuma das entrevistas (total de 1.722 remoções). Restando uma uma base para a análise de sequências de 50.749 indivíduos.
 
