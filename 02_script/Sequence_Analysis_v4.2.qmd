@@ -201,8 +201,10 @@ seqdplot(mvad.seq, with.legend = "right", border = NA, main = "Distribução de 
 ```
 
 ```{r}
+
+png("grafico_índices_pre_pandemia.png", width = 1200, height = 800, res = 150)
 #Exibindo todas as sequências do dataframe (gráfico de índices)
-seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Gráfico de Índices - Pré-pandemia")
 ```
 
 ```{r}
@@ -426,13 +428,26 @@ seqdplot(mvad.seq, with.legend = "right", border = NA, main = "Distribução de 
 ```
 
 ```{r}
+
+png("grafico_indices_pandemia.png", width = 1200, height = 800, res = 150)
 #Exibindo todas as sequências do dataframe (gráfico de índices)
-seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Gráfico de Índices - Período pandêmico")
 ```
 
 ```{r}
 #Exibindo as 10 sequências mais frequentes
 seqfplot(mvad.seq, with.legend = "right")
+```
+
+Estatisticas descritivas
+
+```{r}
+seqmeant(mvad.seq, prop=TRUE)
+
+count_tcp <- data_pre_pandemia_wide |> 
+  filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
+  count()
+  
 ```
 
 #### 2.3. Clusterização dos resultados.
@@ -641,13 +656,29 @@ seqdplot(mvad.seq, with.legend = "right", border = NA, main = "Distribução de 
 ```
 
 ```{r}
+
+png("grafico_indices_pos_pandemia.png", width = 1200, height = 800, res = 150)
 #Exibindo todas as sequências do dataframe (gráfico de índices)
-seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Gráfico de Índices - Pós-pandemia")
 ```
 
 ```{r}
 #Exibindo as 10 sequências mais frequentes
 seqfplot(mvad.seq, with.legend = "right")
+
+count_tcp <- data_pandemia_wide |> 
+  filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
+  count()
+```
+
+Estatísticas descritivas
+
+```{r}
+seqmeant(mvad.seq, prop=TRUE)
+
+count_tcp <- data_pos_pandemia_wide |> 
+  filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
+  count()
 ```
 
 #### 3.3. Clusterização dos resultados.
@@ -679,8 +710,8 @@ Abaixo, será definido o número de clustering, e será inserido na base como um
 ```{r}
 # Método 1:
 
-part <- 5
-cluster <- cutree(agnes, k = 5)
+part <- 4
+cluster <- cutree(agnes, k = 4)
 newpart <- wcKMedoids(dissim, k=part, initialclust=cluster, cluster.only=TRUE)
 part_1 <- as.numeric(as.factor(newpart))
 #Inserindo a variável de cluster (Verificar como fazer isso)
@@ -688,7 +719,7 @@ data_pos_pandemia_wide$cluster <- cluster
 
 # Método 2:
 
-pamClustRange <- wcKMedRange(dissim, kvals = 5, weights = aggMvad$aggWeights)
+pamClustRange <- wcKMedRange(dissim, kvals = 4, weights = aggMvad$aggWeights)
 #Inserindo a variável de cluster
 uniqueCluster5  <-  pamClustRange$clustering$cluster5 
 data_pos_pandemia_wide$cluster5  <- uniqueCluster5[aggMvad$disaggIndex]
@@ -702,7 +733,7 @@ dev.off()
 # Gráfico de Índices 
 
 png("cluster_ind_pos.png", width = 800, height = 600)
-seqIplot(mvad.seq, group=pamClustRange$clustering$cluster5, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+seqIplot(mvad.seq, group=part_1, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
 dev.off()
 
 
