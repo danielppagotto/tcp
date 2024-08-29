@@ -652,14 +652,14 @@ seqiplot(mvad.seq, with.legend = "right")
 png("distribuicao_estados_pos_pandemia.png", width = 1200, height = 800, res = 150)
 
 #Exibindo as frequências relativas dos grupos
-seqdplot(mvad.seq, with.legend = "right", border = NA, main = "Distribução de estados - Pós-pandemia")
+seqdplot(mvad.seq, with.legend = "right", border = NA)
 ```
 
 ```{r}
 
 png("grafico_indices_pos_pandemia.png", width = 1200, height = 800, res = 150)
 #Exibindo todas as sequências do dataframe (gráfico de índices)
-seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Gráfico de Índices - Pós-pandemia")
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
 ```
 
 ```{r}
@@ -678,6 +678,62 @@ seqmeant(mvad.seq, prop=TRUE)
 
 count_tcp <- data_pos_pandemia_wide |> 
   filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
+  count()
+
+count_tcp_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "CP") |> 
+  count()
+
+count_tcp_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "CP") |> 
+  count()
+
+count_pfft_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "PFFT") |> 
+  count()
+
+count_pfft_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "PFFT") |> 
+  count()
+
+count_espr_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "ESPR") |> 
+  count()
+
+count_espr_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "ESPR") |> 
+  count()
+
+count_emp_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "EMP") |> 
+  count()
+
+count_emp_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "EMP") |> 
+  count()
+
+count_deso_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "Desocupado") |> 
+  count()
+
+count_deso_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "Desocupado") |> 
+  count()
+
+count_espu_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "ESPU") |> 
+  count()
+
+count_espu_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "ESPU") |> 
+  count()
+
+count_tfnr_1 <- data_pos_pandemia_wide |> 
+  filter(`1` == "TFNR") |> 
+  count()
+
+count_tfnr_5 <- data_pos_pandemia_wide |> 
+  filter(`5` == "TFNR") |> 
   count()
 ```
 
