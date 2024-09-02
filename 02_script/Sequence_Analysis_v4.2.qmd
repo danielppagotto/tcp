@@ -208,6 +208,8 @@ seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Gráfico
 ```
 
 ```{r}
+
+
 #Exibindo as 10 sequências mais frequentes
 seqfplot(mvad.seq, with.legend = "right")
 ```
@@ -663,12 +665,11 @@ seqIplot(mvad.seq, sortv = "from.start", with.legend = "right")
 ```
 
 ```{r}
-#Exibindo as 10 sequências mais frequentes
-seqfplot(mvad.seq, with.legend = "right")
 
-count_tcp <- data_pandemia_wide |> 
-  filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
-  count()
+png("grafico_frequencia_pos_pandemia.png", width = 1200, height = 800, res = 150)
+#Exibindo as 10 sequências mais frequentes
+seqfplot(mvad.seq, with.legend = "right", idxs = 2:7)
+
 ```
 
 Estatísticas descritivas
@@ -680,60 +681,16 @@ count_tcp <- data_pos_pandemia_wide |>
   filter(rowSums(across(2:6, ~.x == "CP", .names = "col_{.col}")) == 5) |> 
   count()
 
-count_tcp_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "CP") |> 
+#Contagem de transições entre CP e PFFT
+count_tcp_PFFT <- data_pos_pandemia_wide |> 
+  filter(rowSums(across(2:6, ~ .x == "CP")) > 0 & 
+         rowSums(across(2:6, ~ .x == "PFFT")) > 0) |> 
   count()
 
-count_tcp_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "CP") |> 
-  count()
-
-count_pfft_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "PFFT") |> 
-  count()
-
-count_pfft_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "PFFT") |> 
-  count()
-
-count_espr_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "ESPR") |> 
-  count()
-
-count_espr_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "ESPR") |> 
-  count()
-
-count_emp_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "EMP") |> 
-  count()
-
-count_emp_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "EMP") |> 
-  count()
-
-count_deso_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "Desocupado") |> 
-  count()
-
-count_deso_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "Desocupado") |> 
-  count()
-
-count_espu_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "ESPU") |> 
-  count()
-
-count_espu_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "ESPU") |> 
-  count()
-
-count_tfnr_1 <- data_pos_pandemia_wide |> 
-  filter(`1` == "TFNR") |> 
-  count()
-
-count_tfnr_5 <- data_pos_pandemia_wide |> 
-  filter(`5` == "TFNR") |> 
+#Contagem de transições entre CP e ESPR
+count_tcp_espr <- data_pos_pandemia_wide |> 
+  filter(rowSums(across(2:6, ~ .x == "CP")) > 0 & 
+         rowSums(across(2:6, ~ .x == "ESPR")) > 0) |> 
   count()
 ```
 
