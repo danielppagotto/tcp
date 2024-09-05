@@ -1,0 +1,337 @@
+---
+title: "teste"
+format: html
+editor: visual
+---
+
+### 1. Análise de sequência
+
+A base de dados utilizada neste script, é a de trabalhadores que receberam no máximo cinco visitas. Os dados de interesse, são do ano de 2022 e 2023.
+
+```{r, warning=FALSE}
+}
+
+options(scipen = 999)
+
+# install.packages("TraMineR")
+library(TraMineR)
+library(tidyverse)
+library(cluster)
+library(TraMineRextras)
+library(WeightedCluster)
+library(FactoMineR)
+library(ade4)
+library(RColorBrewer)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(seqhandbook)
+library(stringr)
+
+```
+
+A base de dados utilizada neste trabalho possui **id**, para grupos de indivíduos. No próximo bloco será criado um filtro para o ano de 2022 e 2023, para pessoas que possuem idade a partir de 14 anos e um **ID_UNICO**, para os indivíduos. As variáveis cocatenadas para identificar os indivíduos são: UPA, V1008(número de seleção do domicílio), V1014(grupo de amostras), V2008 (dia de nascimento), V20081 (mês de nascimento), V20082 (Ano de nascimento), V2007 (sexo), estrato.
+
+```{r}
+# Carregando a base
+
+# data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+data_1 <- read.csv("tcp_5trimestres.csv")
+
+# Filtrando os anos de 2022 e 2023
+
+data_2022_2023 <- data_1 |> 
+  select(id, Ano, Trimestre, UF, UPA, Estrato, V1008,V4012,V1014, V1016, V2008, V20081, V20082, V2007, V2009,VD4001,VD4002) |>
+  filter(V2009 >= 14, Ano %in% c(2022, 2023))
+
+#criando a variável ID_UNICO
+
+data_id <- data_2022_2023 %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082,V2007, Estrato, sep = "_")) %>%
+  relocate(ID_UNICO, .before = Ano)
+
+#Criando a variável Trimestre_Ano
+data_id_unico <- data_id %>%
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, sep = "-"), .before = UF)
+
+#names(data_id)
+
+```
+
+#### 1.1. Tratamento dos dados.
+
+Alguns níveis da variável V4012, serão unidos. Todos os níveis serão renomeados com inciais de suas respectivas descrição, conforme a tabela abaixo. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002), serão agregadas a variável V4012, com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho.
+
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| Antes do tratamento                                                                                       | Após o tratamento                   | Abreviação |
++===========================================================================================================+:===================================:+:==========:+
+| -   Empregado do setor privado.                                                                           | Empregado do setor privado          | ESPR       |
+|                                                                                                           |                                     |            |
+| -   Trabalhador doméstico.                                                                                |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Empregado do setor público (inclusive empresas de economia mista).                                    | Empregado do setor público          | ESPU       |
+|                                                                                                           |                                     |            |
+| -   Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar. |                                     |            |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Conta própria.                                                                                        | Conta própria                       | CP         |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+| -   Trabalhador familiar não remunerado.                                                                  | Trabalhador familiar não remunerado | TFNR       |
++-----------------------------------------------------------------------------------------------------------+-------------------------------------+------------+
+
+```{r}
+# Renomeando os registros nas linhas
+
+data <- data_id_unico|> 
+  mutate(V4012_ajust = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Trabalhador doméstico" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPU",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    V4012 == "Empregador" ~ "EMP"), .after = Ano)
+
+
+#Agregando a condição de força da força de trabalho e desocupado
+data <- data %>%
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "PD",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "PFFT"
+  ), .after = VD4002)
+
+```
+
+No próximo bloco, serão selecionadas as variáveis de interesse e os dados transformados no formato adequado para aplicar funções da Análise de Sequências.
+
+```{r}
+data_long <- data |>
+  select(ID_UNICO,V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide <- data_long |> 
+  pivot_wider(names_from = V1016, values_from = ocupacao)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem <- data_wide|> 
+  relocate(ID_UNICO,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) #
+
+data_filtro <- data_ordem  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  # Remove linhas ond
+  filter(rowSums(across(2:6, ~ . != "CP")) < 5)  # Mantém l
+
+str(data_filtro)
+
+
+# OBS. Valores duplicados foram excluidos ao a plicar os filtros acima.
+```
+
+No próximo bloco as sequências parecidas serão agregadas como uma. Serão inseridos pesos nesse processo. O objeto de sequência temporal será criado.
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+aggMvad <- wcAggregateCases(data_filtro[, 2:6])
+print(aggMvad)
+uniqueMvad <- data_filtro[aggMvad$aggIndex, 2:6]
+mvad.seq <- seqdef(uniqueMvad, weights = aggMvad$aggWeights)
+```
+
+#### 1.2. Resultados.
+
+O gráfico a seguir é da frequência de sequências
+
+```{r}
+seqdplot(mvad.seq, with.legend = "right")
+```
+
+Segue o gráfico das dez sequências mais representativas
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(mvad.seq, with.legend = "right")
+```
+
+```{r}
+# Gráficos de índices
+seqIplot(mvad.seq, sortv = "from.start", with.legend = "right", main = "Sequências Agrupadas Conforme o Estado Inicial")
+```
+
+Segue a matriz de transição de estados. Se o indivíduo está como conta própria, há 12,29% de chance de transitar para PFFT no próximo evento.(Soma 1 nas linhas)
+
+```{r}
+# Calcular a matriz de transição em percentagens
+prop_trans <- seqtrate(mvad.seq)
+prop_trans
+
+```
+
+#### 1.3. Clusterização dos resultados.
+
+A seguir, será realizada a clusterização dos resultados.
+
+O objeto *couts* recebe a *matriz de substituição*, que mensura a substituição de epsódias para transformar sequências distintas em semelhantes. Esse custo será o mesmo em cada ação e atribuído ao argumento method : *CONSTANT.*
+
+A matriz de dissimilaridade será calculada pelo método OM.
+
+E por fim, através da função as.dist e agnes, converteremos a matriz de distâncias em um objeto compatível para clustering e realizar a análise de cluster hierárquico aglomerativo usando o método de Ward.
+
+```{r}
+# Para construção da matriz de dissimilaridades
+
+couts <- seqsubm(mvad.seq, method="CONSTANT", cval=2)
+dissim <- seqdist(mvad.seq, method="OM", sm=couts, indel=1.5)
+#agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
+```
+
+```{r}
+#Realizar a análise de clusters usando hclust
+agrup <- hclust(as.dist(dissim), method = "ward.D2")
+```
+
+```{r}
+# O dendrograma
+as.dendrogram(agrup) %>% plot(leaflab="none")
+```
+
+```{r}
+# gráfico de índice de sequências ordenadas de acordo com um dendograma
+
+seq_heatmap(mvad.seq,agrup)
+```
+
+```{r}
+# Verificando a quantidade de clusters mais adequado
+# indicators of quality
+qualidade_grupo <- as.clustrange(agrup, diss=dissim)
+summary(qualidade_grupo, max.rank=2)
+```
+
+```{r}
+# Definir a quantidade de clusters
+corte <- as.clustrange(agrup,dissim, ncluster = 7)
+corte
+plot(corte, lwd = 4)
+plot(corte, norm = "zscore", lwd = 4)
+#plot(corte, stat = c("ASW", "HC", "PBC","R2"), norm = "zscore", lwd = 4)
+```
+
+A quantidade escolhida foram quatro agrupamento
+
+```{r}
+# choosing the partition in 5 clusters
+nbcl <- 4
+part <- cutree(agrup, nbcl)
+```
+
+A qualidade deste agrupamento é fraca seria ótimo acima de 0.7, tolerável entre 0.5 e 0.7. No bloco a seguir está a função que calcula a qualiade.
+
+```{r}
+silhueta <- silhouette(part, as.dist(dissim))
+media_silhueta <- mean(silhueta[, 3])
+media_silhueta
+```
+
+```{r}
+group1.seq <- mvad.seq[part == 1, ]
+seqIplot(group1.seq, 
+         xtlab=1:5,
+         yaxis=FALSE,cex.axis=1.5, 
+         cex.lab =1.5, cex.legend = 1.3, 
+         with.legend="right",cex.main=2, 
+         main = "Grupo - 01")
+
+```
+
+```{r}
+
+group2.seq <- mvad.seq[part == 2, ]
+seqIplot(group2.seq, 
+         xtlab=1:5, 
+         yaxis=FALSE,
+         cex.axis=1.5, 
+         cex.lab =1.5, 
+         cex.legend = 1.3, 
+         with.legend="right", 
+         main = "Grupo - 02")
+```
+
+```{r}
+group3.seq <- mvad.seq[part == 3, ]
+seqIplot(group3.seq, 
+         xtlab=1:5, 
+         yaxis=FALSE,
+         cex.axis=1.5, 
+         cex.lab =1.5, 
+         cex.legend = 1.3, 
+         with.legend="right", 
+         main = "Grupo - 03")
+```
+
+```{r}
+group3.seq <- mvad.seq[part == 4, ]
+seqIplot(group3.seq, 
+         xtlab=1:5, 
+         yaxis=FALSE,
+         cex.axis=1.5, 
+         cex.lab =1.5, 
+         cex.legend = 1.3, 
+         with.legend="right", 
+         main = "Grupo - 04")
+```
+
+```{r}
+# Proporção de sequências diferentes em cada grupo
+# Acima utilizando função do pacote
+group_counts <- table(part)
+group_percentages <- prop.table(group_counts) * 100
+group_percentages
+
+```
+
+```{r}
+# Forma da trajetória em cada clusters(média), tempo gasto nos estados
+
+dur <- seqistatd(mvad.seq)
+durees <- round(aggregate(dur, by=list(part), FUN=mean), 1)
+rownames(durees) <- NULL
+durees
+
+```
+
+```{r}
+#A proporção de indivíduos que vivenciaram pelo menos um episódio nos estados:
+
+epi <- seqi1epi(mvad.seq)
+episodes <- round(aggregate(epi, by=list(part), FUN=mean), 2)
+rownames(episodes) <- NULL
+episodes
+```
+
+```{r}
+# O peso de cada agrupamento
+freq(part)
+# 2468
+```
+
+```{r}
+# Homogeneidade dentro do cluster cluters
+Dintra <- integer(length=nbcl)
+for(i in 1:nbcl) Dintra[i] <- round(mean(dissim[part==i,part==i]),1)
+Dintra
+```
+
+```{r}
+# Distância média ao centro o cluster
+dissassoc(dissim, part)$groups
+```
+
+```{r}
+# Emtropia
+entropie <- vector()
+for(i in 1:nbcl) entropie[i] <- round(mean(seqstatd(mvad.seq[part==i,])$Entropy),2)
+entropie
+
+```
+
+Quanto menor a entropia, melhor indicação de um padrão dominante.
