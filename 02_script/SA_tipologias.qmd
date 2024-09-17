@@ -1,0 +1,218 @@
+---
+title: "Sequence Analysis: Técnica."
+format: html
+editor: visual
+---
+
+## Quarto
+
+Nesse script, descreveremos o processo de análise de sequência de acordo com as três etapas (Liao et al., 2022):
+
+1.  Codificação do sequenciamento;
+
+2.  Medição de disssimalariedade;
+
+3.  Redução da dimensionalidade.
+
+Após a preparação da base de dados, as etapas mencionadas serão descritas conforme o desenvolvimento do script. É utilizado a amostragem de indivíduos que iniciaram a pesquisa no quarto trimestre de 2022 e finalizaram no último de 2023. Será criada uma variável de identificação do indivíduo e filtrado apenas os maiores de 14 anos.
+
+```{r}
+library(tidyverse)
+library(TraMineR)
+library(cluster)
+
+```
+
+```{r}
+#abrindo a base
+data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+
+#criando a variável ID_UNICO
+data <- data %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082, genero, Estrato, sep = "_")) %>%
+  relocate(ID_UNICO, .before = Capital)
+
+#Criando a variável Trimestre_Ano
+data <- data %>%
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, sep = "-"), .before = UF)
+
+#Filtrando maiores de 14 anos
+data <- data |> 
+  filter(V2009 >= 14)
+
+# Selecionando apenas um grupo de amostragem
+data_grupo <- data |> 
+  filter(
+    (Trimestre_Ano == "4-2022" & V1016 == 1) |
+      (Trimestre_Ano == "1-2023" & V1016 == 2) |
+      (Trimestre_Ano == "2-2023" & V1016 == 3) |
+      (Trimestre_Ano == "3-2023" & V1016 == 4) |
+      (Trimestre_Ano == "4-2023" & V1016 == 5)
+  )
+```
+
+A seguir, será recodificada a variável de ocupação e agregada a condição de pessoas fora da força de trabalho.
+
+```{r}
+#Reclassificando  as condições de ocupações
+data_tratamento <- data_grupo |> 
+  mutate(V4012_ajust = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Trabalhador doméstico" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPU",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    V4012 == "Empregador" ~ "EMP",
+    TRUE ~ V4012  # Mantém o valor original para outros casos
+  ), .after = Ano)
+
+#Agregando a condição de força da força de trabalho e desocupado
+data_tratamento <- data_tratamento %>%
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "Desempregado",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "Desempregado",
+  ), .after = VD4002)
+
+```
+
+```{r}
+#Selecionando as variáveis de interesse
+data_tratamento <- data_tratamento |> 
+  select(ID_UNICO, V1016, ocupacao)
+
+#Transformando a estrutura de dados para largo
+data_wide <- data_tratamento |> 
+  pivot_wider(names_from = V1016, values_from = ocupacao)
+
+#Contagem de valores ausentes
+data_wide <- data_wide %>%
+  filter(is.na(`1`) | is.na(`2`) | is.na(`3`) | is.na(`4`) | is.na(`5`)) %>%
+  summarise(quantidade = n_distinct(ID_UNICO))
+
+#Excluindo valores ausentes
+data_wide <- data_wide |> 
+  filter(!rowSums(is.na(across(2:6))) > 0)
+
+set.seed(123)  # Define uma semente para replicabilidade
+data_200_123 <- sample_n(data_wide, 200)
+
+set.seed(321)  # Define uma semente para replicabilidade
+data_200_321 <- sample_n(data_wide, 200)
+
+set.seed(231)  # Define uma semente para replicabilidade
+data_200_231 <- sample_n(data_wide, 200)
+```
+
+### 1) Codificação do sequenciamento;
+
+A cofidicação do sequenciamento é realizado através da função seqdef do pacote TraMineR, que define o objeto de sequência utilizado para gerar visualização gráfica. Abaixo será definido objeto de sequência para três amostras distintas, e em seguida, a visualização dos gráficos de índices, de distribuição de estados e de sequências mais frequentes.
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq_123<- seqdef(data_200_123, var = 2:6)
+
+actcal.seq_321<- seqdef(data_200_321, var = 2:6)
+
+actcal.seq_231<- seqdef(data_200_231, var = 2:6)
+
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_123, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_321, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_231, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+# Gráfico de distribuição de estados
+seqdplot(actcal.seq_123, with.legend = "right", border = NA)
+```
+
+```{r}
+# Gráfico de distribuição de estados
+seqdplot(actcal.seq_321, with.legend = "right", border = NA)
+```
+
+```{r}
+# Gráfico de distribuição de estados
+seqdplot(actcal.seq_321, with.legend = "right", border = NA)
+```
+
+```{r}
+# Gráfico de sequências mais frequentes
+seqfplot(actcal.seq_123, with.legend = "right")
+```
+
+```{r}
+# Gráfico de sequências mais frequentes
+seqfplot(actcal.seq_321, with.legend = "right")
+```
+
+```{r}
+# Gráfico de sequências mais frequentes
+seqfplot(actcal.seq_231, with.legend = "right")
+```
+
+### 2) Medição de disssimalariedade.
+
+A medição de dissimalariedade consiste em identificar o quanto as sequências são diferentes uma das outras. O método adotado é de Optimal Matching, que estima a dissimalariedade como o custo de transformar duas sequências em iguais, dessa forma, gerando uma matriz de dissimalariedade.
+
+```{r}
+
+dist.om1 <- seqdist(actcal.seq_123, method = "OM", indel = 1, sm = "TRATE")
+
+dist.om2 <- seqdist(actcal.seq_321, method = "OM", indel = 1, sm = "TRATE")
+
+dist.om3 <- seqdist(actcal.seq_231, method = "OM", indel = 1, sm = "TRATE")
+
+library(cluster)
+
+```
+
+### 3) Redução da dimensionalidade.
+
+A redução da dimensionalidade consiste em desagregar as sequências em clusters de acordo com as similariedades e dissimilariedades identificada em matriz. No método adotado, é utilizado a função agnes que realiza uma análise de cluster hierárquico através do método Ward que minima a variância dentro dos agrupamentos, e a função cutree corta o dendograma de acordo com o número de grupos desejados.
+
+```{r}
+clusterward1 <- agnes(dist.om1, diss = TRUE, method = "ward")
+plot(clusterward1, which.plot = 2)
+cl1.1 <- cutree(clusterward1, k = 4)
+cl1.4fac <- factor(cl1.1, labels = paste("Type", 1:4))
+
+seqIplot(actcal.seq_231, group = cl1.4fac, sortv = "from.start")
+```
+
+```{r}
+
+
+
+clusterward2 <- agnes(dist.om2, diss = TRUE, method = "ward")
+plot(clusterward2, which.plot = 2)
+cl1.2 <- cutree(clusterward2, k = 4)
+cl1.4fac2 <- factor(cl1.2, labels = paste("Type", 1:4))
+
+seqIplot(actcal.seq_123, group = cl1.4fac2, sortv = "from.start")
+```
+
+```{r}
+
+
+
+clusterward3 <- agnes(dist.om3, diss = TRUE, method = "ward")
+plot(clusterward3, which.plot = 2)
+cl1.3 <- cutree(clusterward3, k = 4)
+cl1.4fac3 <- factor(cl1.3, labels = paste("Type", 1:4))
+
+seqIplot(actcal.seq_123, group = cl1.4fac3, sortv = "from.start")
+```
