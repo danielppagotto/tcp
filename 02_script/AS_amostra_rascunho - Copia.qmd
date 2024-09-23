@@ -1,0 +1,358 @@
+---
+title: "teste"
+format: html
+editor: visual
+---
+
+### 1. Análise de sequência
+
+A base de dados utilizada neste script, é a de trabalhadores que participaram no máximo de cinco entrevistas. Os dados de interesse, são do ano de 2022 e 2023.
+
+```{r, warning=FALSE}
+
+
+options(scipen = 999)
+
+#install.packages("dbscan")
+library(TraMineR)
+library(tidyverse)
+library(cluster)
+library(TraMineRextras)
+library(WeightedCluster)
+library(FactoMineR)
+library(ade4)
+library(RColorBrewer)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(seqhandbook)
+library(stringr)
+library(ggseqplot)
+library(factoextra)
+library(dbscan)
+
+
+```
+
+A base de dados utilizada neste trabalho possui **id** para grupos de indivíduos. No próximo bloco será criado um filtro para o ano de 2022 e 2023, para pessoas que possuem idade a partir de 14 anos e um **ID_UNICO**, para os indivíduos. As variáveis cocatenadas para identificar os indivíduos são: UPA, V1008(número de seleção do domicílio), V1014(grupo de amostras), V2008 (dia de nascimento), V20081 (mês de nascimento), V20082 (Ano de nascimento), V2007 (sexo), estrato.
+
+```{r}
+# Carregando a base
+
+data_1 <- read.csv("tcp_5trimestres.csv")
+
+# Filtrando os anos de 2022 e 2023
+
+data_2022_2023 <- data_1 %>%  
+  select(id, Ano, Trimestre, UF, UPA, Estrato, 
+         V1008,V4012,V1014, V1016, V2008, V20081, 
+         V20082, V2007, V2009,VD4001,VD4002) %>% 
+  filter(V2009 >= 14, Ano %in% c(2022, 2023))
+
+#criando a variável ID_UNICO
+
+data_id <- data_2022_2023 %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, 
+                          V2008, V20081, V20082,
+                          V2007, Estrato, sep = "_")) %>%
+  relocate(ID_UNICO, .before = Ano)
+
+#Criando a variável Trimestre_Ano
+data_id_unico <- data_id %>%
+  mutate(Trimestre_Ano = paste(Trimestre, 
+                               Ano, sep = "-"), .before = UF)
+
+```
+
+#### 1.1. Tratamento dos dados.
+
+Alguns níveis da variável V4012, serão unidos. Todos os níveis serão renomeados com inciais de suas respectivas descrição, conforme a tabela abaixo. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002), serão agregadas a variável V4012, com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho.
+
++--------------------------------------+----------------------------+--------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação   |
++======================================+:==========================:+:============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
+|                                      |                            |              |
+| -   Trabalhador doméstico.           |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
+|                                      |                            |              |
+| -   Pessoa desocupada                |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Conta própria.                   | Conta própria              | CP           |
++--------------------------------------+----------------------------+--------------+
+| -   Empregador                       | Emprgador                  | EMP          |
++--------------------------------------+----------------------------+--------------+
+
+```{r}
+# Renomeando os registros nas linhas
+
+data <- data_id_unico|> 
+  mutate(V4012_ajust = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Trabalhador doméstico" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPU",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    V4012 == "Empregador" ~ "EMP"), .after = Ano)
+
+
+#Agregando a condição de força da força de trabalho e desocupado
+data_0 <- data %>%
+  mutate(ocupacao = case_when(
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas ocupadas" ~ as.character(V4012_ajust),
+    VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas" ~ "PFT",
+    VD4001 == "Pessoas fora da força de trabalho" ~ "PFT"
+  ), .after = VD4002)
+
+data <- data_0 %>% 
+  filter(!ocupacao %in% c("ESPU", "TFNR"))
+
+```
+
+No próximo bloco, serão selecionadas as variáveis de interesse e os dados transformados no formato adequado para aplicar funções da Análise de Sequências.
+
+```{r}
+data_long <- data |>
+  select(ID_UNICO,V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide <- data_long |> 
+  pivot_wider(names_from = V1016, values_from = ocupacao)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem <- data_wide|> 
+  relocate(ID_UNICO,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) #
+
+data_filtro <- data_ordem  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  # Remove linhas ond
+  filter(rowSums(across(2:6, ~ . != "CP")) < 5)  # Mantém l
+
+str(data_filtro)
+
+
+# OBS. Valores duplicados foram excluidos ao a plicar os filtros acima.
+```
+
+Geraremos uma amostra aleatório para testar os diferentes métodos de clusterização.
+
+```{r}
+# gerar uma amostra de cem sequências
+set.seed(2024)
+amostra <- sample_n(data_filtro, 200)
+```
+
+```{r}
+# Escolher cores a fim de otimizar os gráficos
+#display.brewer.all()
+
+#brewer.pal(n = 9, name = "Blues")
+```
+
+### 2. Processo de sequênciamento
+
+```{r}
+# Objeto de sequência
+
+# Alfabeto
+alfabeto <- c("CP", "PFT", "ESPR", "EMP")
+# Rótulos
+rotulo <- c("CP", "PFT", "ESPR", "EMP")
+
+# define state sequence object
+seq <- seqdef(amostra[,-1], 
+                 alphabet = alfabeto,
+                 labels = rotulo,
+                 cnames = c("1", "2", "3", "4"))
+
+#seq <- seqdef(amostra[,-1])
+seqtab(seq, idx=0) %>% nrow
+```
+
+```{r}
+# Gráfico de estado
+seqdplot(seq, xtlab=1:5, cex.legend=0.9, main = "Gráfico de estados _ proporção",
+         with.legend = "right")
+```
+
+```{r}
+
+# Gráfico de índices
+seqIplot(seq, main = "Gráficos de índices", with.legend = "right")
+```
+
+```{r}
+# As dez mais significativas
+seqfplot(seq, main="Dez mais frequentes", with.legend = "right")
+
+```
+
+```{r}
+
+seqfplot(seq, main="Dez mais frequentes", idxs= 1:100,with.legend = "right")
+```
+
+```{r}
+tabela_total <- seqtab(seq, idxs = 1:200 ) 
+tabela_total
+```
+
+Conforme o gráfico acima, metade dos indivíduos da amostra segue uma das trajetórias acima. e 24%, são TCPs, prevalentes, 4% fizeram a trajetória de empregado do setor privado para CP, permanecendo conta proópria no perìodo das outras três entrevistas.
+
+```{r}
+# Ver a matriz de transição
+
+trans_rate <- seqtrate(seq)
+trans_rate
+```
+
+A matriz de transição indica a possibilidade do passo de um estado para outro. A probabilidade do trabalhador permanecer CP é de 0.71 . A probabilidade, na amostra da pessoa sair de CP para pessoa PFT é de aproximadamente 0.15.
+
+```{r}
+ggseqtrplot(
+seq, x_n.dodge = 2, dss = FALSE) +
+  ggtitle("STS format")
+
+```
+
+```{r}
+# Duraçao em cada estado
+```
+
+### 3. Agrupamento
+
+Para gerar agrupamentos, primeiramente definiremos a matriz de dissimilaridades através da função seqdist.
+
+```{r}
+# Definindo a matriz de dissimilaridades
+
+couts <- seqsubm(seq, method="CONSTANT", cval=2)
+dissim <- seqdist(seq, method="OM", sm=couts, indel=1.5)
+
+
+```
+
+#### 3.1. K-means
+
+```{r}
+# 1. Calcule a representação em duas dimensões (MDS)
+mds <- cmdscale(dissim, k=2)  # Redução para 2 dimensões
+
+# 2. Converta o resultado do MDS para data frame
+mds_df_kmeans <- as.data.frame(mds)
+colnames(mds_df_kmeans) <- c("Dim1", "Dim2")
+
+# 3. Adicione uma coluna de identificadores de sequência
+# Se quiser usar índices numéricos para identificar as sequências
+mds_df_kmeans$sequencia_id <- 1:nrow(mds_df_kmeans)
+
+# 4. Aplique o algoritmo de clustering (k-means) com 4 clusters
+set.seed(123)  # Para garantir a reprodutibilidade
+kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], centers=4)  # K-means nos dados MDS
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
+
+
+ggplot(mds_df_kmeans, aes(x=Dim1, y=Dim2, color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), vjust=-1, hjust=0.5, size=3) +  # Adicione os rótulos com caixas
+  labs(title="Gráfico de Dispersão com Clusters", x="Dimensão 1", y="Dimensão 2") +
+  scale_color_manual(values=c("red", "green", "blue", "purple")) +  # Escolha as cores que desejar
+  theme_minimal()
+```
+
+```{r}
+# 1. Aplique o k-means diretamente ao data frame mds_df_kmeans
+set.seed(2024)
+agrup_kmeans_4 <- kmeans(dissim, centers=4)
+
+# 2. Calcule a silhueta usando as distâncias euclidianas no espaço do MDS
+silhueta_3 <- silhouette(agrup_kmeans_4$cluster, dist(dissim))
+
+# 3. Calcule a média da largura da silhueta (terceira coluna)
+media_silhueta_kmeans_4 <- mean(silhueta_3[, 3])
+
+# Exiba o resultado
+media_silhueta_kmeans_4
+
+
+
+```
+
+#### 3.2. PAM
+
+```{r}
+
+# 2. Calcule a representação em duas dimensões (MDS)
+mds <- cmdscale(dissim, k=2)  # Redução para 2 dimensões
+
+# 3. Converta o resultado do MDS para data frame
+mds_df_pam <- as.data.frame(mds)
+colnames(mds_df_pam) <- c("Dim1", "Dim2")
+
+
+# 3. Adicione uma coluna de identificadores de sequência
+# Se quiser usar índices numéricos para identificar as sequências
+mds_df_pam$sequencia_id <- 1:nrow(mds_df_pam)
+
+# 4. Aplique o algoritmo de clustering (k-means) com 4 clusters
+set.seed(2024)  # Para garantir a reprodutibilidade
+pam_cluster <- pam(dissim, 4)
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_pam$cluster <- as.factor(pam_cluster$cluster)
+
+# 6. Gere o gráfico com as cores baseadas nos clusters
+library(ggplot2)
+
+
+ggplot(mds_df_pam, aes(x=Dim1, y=Dim2, color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), vjust=-1, hjust=0.5, size=3) +  # Adicione os rótulos com caixas
+  labs(title="Gráfico de Dispersão com Clusters", x="Dimensão 1", y="Dimensão 2") +
+  scale_color_manual(values=c("red", "green", "blue", "purple")) +  # Escolha as cores que desejar
+  theme_minimal()
+
+
+```
+
+#### 
+
+```{r}
+# 1. Aplique o método PAM diretamente ao data frame mds_df_pam
+set.seed(2024)
+agrup_pam_4 <- pam(dissim, k = 4)
+
+# 2. Calcule a silhueta usando as distâncias euclidianas no espaço do MDS
+silhueta_pam_4 <- silhouette(agrup_pam_4$clustering, dist(dissim))
+
+# 3. Calcule a média da largura da silhueta (terceira coluna)
+media_silhueta_pam_4 <- mean(silhueta_pam_4[, 3])
+
+# Exiba o resultado
+media_silhueta_pam_4
+```
+
+```{r}
+eps <- 20  # Ajuste conforme necessário
+minPts <- 5  # Ajuste conforme necessário
+
+dbscan_result <- dbscan(dissim, eps = eps, minPts = minPts)
+
+# 3. Visualize os resultados
+# Se você quiser visualizar os clusters, você pode usar MDS para reduzir a dimensionalidade
+mds <- cmdscale(dissim, k=2)  # Reduzindo para duas dimensões
+mds_df <- as.data.frame(mds)
+mds_df$cluster <- as.factor(dbscan_result$cluster)
+
+# 4. Gere o gráfico com os clusters
+library(ggplot2)
+
+ggplot(mds_df, aes(x=V1, y=V2, color=cluster)) +
+  geom_point(size=3) +
+  labs(title="DBSCAN Clustering", x="Dimensão 1", y="Dimensão 2") +
+  theme_minimal()
+```
