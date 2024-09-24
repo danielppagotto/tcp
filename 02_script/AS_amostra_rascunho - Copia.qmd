@@ -68,21 +68,21 @@ data_id_unico <- data_id %>%
 
 Alguns níveis da variável V4012, serão unidos. Todos os níveis serão renomeados com inciais de suas respectivas descrição, conforme a tabela abaixo. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002), serão agregadas a variável V4012, com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho.
 
-+--------------------------------------+----------------------------+--------------+
-| Antes do tratamento                  | Após o tratamento          | Abreviação   |
-+======================================+:==========================:+:============:+
-| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
-|                                      |                            |              |
-| -   Trabalhador doméstico.           |                            |              |
-+--------------------------------------+----------------------------+--------------+
-| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
-|                                      |                            |              |
-| -   Pessoa desocupada                |                            |              |
-+--------------------------------------+----------------------------+--------------+
-| -   Conta própria.                   | Conta própria              | CP           |
-+--------------------------------------+----------------------------+--------------+
-| -   Empregador                       | Emprgador                  | EMP          |
-+--------------------------------------+----------------------------+--------------+
++--------------------------------------+----------------------------+---------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação    |
++======================================+:==========================:+:=============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR          |
+|                                      |                            |               |
+| -   Trabalhador doméstico.           |                            |               |
++--------------------------------------+----------------------------+---------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT           |
+|                                      |                            |               |
+| -   Pessoa desocupada                |                            |               |
++--------------------------------------+----------------------------+---------------+
+| -   Conta própria.                   | Conta própria              | CP            |
++--------------------------------------+----------------------------+---------------+
+| -   Empregador                       | Emprgador                  | EMP           |
++--------------------------------------+----------------------------+---------------+
 
 ```{r}
 # Renomeando os registros nas linhas
@@ -140,8 +140,8 @@ Geraremos uma amostra aleatório para testar os diferentes métodos de clusteriz
 
 ```{r}
 # gerar uma amostra de cem sequências
-set.seed(2024)
-amostra <- sample_n(data_filtro, 200)
+set.seed(2025)
+amostra <- sample_n(data_filtro, 800)
 ```
 
 ```{r}
@@ -151,7 +151,7 @@ amostra <- sample_n(data_filtro, 200)
 #brewer.pal(n = 9, name = "Blues")
 ```
 
-### 2. Processo de sequênciamento
+### 2. Processo de sequenciamento
 
 ```{r}
 # Objeto de sequência
@@ -250,7 +250,7 @@ mds_df_kmeans$sequencia_id <- 1:nrow(mds_df_kmeans)
 
 # 4. Aplique o algoritmo de clustering (k-means) com 4 clusters
 set.seed(123)  # Para garantir a reprodutibilidade
-kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], centers=4)  # K-means nos dados MDS
+kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], centers=10)  # K-means nos dados MDS
 
 # 5. Adicione os resultados do cluster ao data frame
 mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
@@ -259,26 +259,55 @@ mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
 ggplot(mds_df_kmeans, aes(x=Dim1, y=Dim2, color=cluster)) +
   geom_point(size=3) +
   geom_label(aes(label=sequencia_id), vjust=-1, hjust=0.5, size=3) +  # Adicione os rótulos com caixas
-  labs(title="Gráfico de Dispersão com Clusters", x="Dimensão 1", y="Dimensão 2") +
-  scale_color_manual(values=c("red", "green", "blue", "purple")) +  # Escolha as cores que desejar
+  labs(title="Gráfico de Dispersão com Clusters", x="Dimensão 1", y="Dimensão 2") #+
+#  scale_color_manual(values=c("red", "green", "blue", "purple", "yellow", "black")) +  # Escolha as cores que desejar
   theme_minimal()
 ```
 
 ```{r}
-# 1. Aplique o k-means diretamente ao data frame mds_df_kmeans
-set.seed(2024)
-agrup_kmeans_4 <- kmeans(dissim, centers=4)
 
 # 2. Calcule a silhueta usando as distâncias euclidianas no espaço do MDS
-silhueta_3 <- silhouette(agrup_kmeans_4$cluster, dist(dissim))
-
-# 3. Calcule a média da largura da silhueta (terceira coluna)
-media_silhueta_kmeans_4 <- mean(silhueta_3[, 3])
+silhueta_3 <- silhouette(kmeans_result$cluster, dist(dissim))
 
 # Exiba o resultado
-media_silhueta_kmeans_4
+
+silhueta_3
 
 
+
+
+
+```
+
+```{r}
+# Gráfico de índices
+seqIplot(seq, 
+        group = kmeans_result$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim)
+```
+
+```{r}
+
+set.seed(123)  # Para garantir a reprodutibilidade
+kmeans_result2 <- kmeans(dissim, centers=5)
+
+seqIplot(seq, 
+        group = kmeans_result2$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim)
+
+silhouette(agrup_kmeans_4$cluster, dist(dissim))
+
+```
+
+```{r}
+
+fviz_nbclust(mds_df_kmeans, kmeans, method = "wss")
 
 ```
 
@@ -300,7 +329,7 @@ mds_df_pam$sequencia_id <- 1:nrow(mds_df_pam)
 
 # 4. Aplique o algoritmo de clustering (k-means) com 4 clusters
 set.seed(2024)  # Para garantir a reprodutibilidade
-pam_cluster <- pam(dissim, 4)
+pam_cluster <- pam(dissim, 3)
 
 # 5. Adicione os resultados do cluster ao data frame
 mds_df_pam$cluster <- as.factor(pam_cluster$cluster)
@@ -322,37 +351,20 @@ ggplot(mds_df_pam, aes(x=Dim1, y=Dim2, color=cluster)) +
 #### 
 
 ```{r}
-# 1. Aplique o método PAM diretamente ao data frame mds_df_pam
-set.seed(2024)
-agrup_pam_4 <- pam(dissim, k = 4)
+
 
 # 2. Calcule a silhueta usando as distâncias euclidianas no espaço do MDS
-silhueta_pam_4 <- silhouette(agrup_pam_4$clustering, dist(dissim))
+silhueta_pam_4 <- silhouette(pam_cluster$clustering, dist(dissim))
 
-# 3. Calcule a média da largura da silhueta (terceira coluna)
-media_silhueta_pam_4 <- mean(silhueta_pam_4[, 3])
-
-# Exiba o resultado
-media_silhueta_pam_4
+silhueta_pam_4
 ```
 
 ```{r}
-eps <- 20  # Ajuste conforme necessário
-minPts <- 5  # Ajuste conforme necessário
-
-dbscan_result <- dbscan(dissim, eps = eps, minPts = minPts)
-
-# 3. Visualize os resultados
-# Se você quiser visualizar os clusters, você pode usar MDS para reduzir a dimensionalidade
-mds <- cmdscale(dissim, k=2)  # Reduzindo para duas dimensões
-mds_df <- as.data.frame(mds)
-mds_df$cluster <- as.factor(dbscan_result$cluster)
-
-# 4. Gere o gráfico com os clusters
-library(ggplot2)
-
-ggplot(mds_df, aes(x=V1, y=V2, color=cluster)) +
-  geom_point(size=3) +
-  labs(title="DBSCAN Clustering", x="Dimensão 1", y="Dimensão 2") +
-  theme_minimal()
+# Gráfico de índices
+seqIplot(seq, 
+        group = pam_cluster$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim)
 ```
