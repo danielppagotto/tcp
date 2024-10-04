@@ -1,5 +1,5 @@
 ---
-title: "teste"
+title: "Análise de Sequência"
 format: html
 editor: visual
 ---
@@ -22,7 +22,8 @@ A base de dados utilizada neste script, é a de trabalhadores que participaram n
 
 Carregando pacotes necessários.
 
-```{r, warning=FALSE}
+```{r}
+#| warning: false
 
 options(scipen = 999)
 
@@ -35,6 +36,7 @@ library(descriptio)
 library(purrr)
 library(stringr)
 library(ggseqplot)
+library(factoextra)
 
 ```
 
@@ -49,7 +51,7 @@ Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este 
 # Carregando a base
 
 data_1 <- vroom::vroom("~/GitHub/tcp/tcp_5trimestres.csv",
-                       progress = TRUE,
+                       progress = FALSE,
                        show_col_types = FALSE)
 
 # Filtrando os anos de 2022 e 2023 e filtrando pessoas maiores que 14 anos
@@ -171,7 +173,8 @@ data_long <- dados_tratados |>
 
 #Transformando a estrutura de dados para wide
 data_wide <- data_long |> 
-  pivot_wider(names_from = V1016, values_from = ocupacao)
+  pivot_wider(names_from = V1016, values_from = ocupacao,
+              values_fn = list)
 
 # Colocando as colunas em ordem de entrevista e para caracteres
 data_ordem <- data_wide|> 
@@ -190,7 +193,7 @@ data_filtro <- data_ordem  |>
 Foram mantidos apenas aqueles indivíduos que possuem registros nos cinco trimestres, conforme o último bloco de códigos acima. Isso resultou em uma amostra de 46645 indivíduos que foram acompanhados ao longo de 5 trimestres entre 2022 e 2023.
 
 ```{r}
-#|include: false
+#|echo: false
 
 #writexl::write_xlsx(data_filtro, "~/GitHub/tcp/01_dados/dados_22_23_tratados.xlsx")
 
@@ -425,7 +428,7 @@ colnames(mds_df_kmeans) <- c("Dim1",
 
 ```
 
-Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria algo entre 2 e 3 clusters.
+Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria 3 clusters.
 
 ```{r}
 
@@ -547,4 +550,162 @@ seqmtplot(seq,
         cex.axis = 1.5, 
         cex.lab = 1.5,
         sortv = dissim)
+```
+
+## 1.5. Rodando com amostra 2
+
+```{r}
+
+seq2 <- seqdef(amostra2[,c(-1,-7)], 
+                 alphabet = alfabeto,
+                 labels = rotulo,
+                 cnames = c("1", "2", "3", "4","5"))
+
+
+couts2 <- seqsubm(seq2, 
+                 method="CONSTANT", 
+                 cval=2)
+
+dissim2 <- seqdist(seq2, 
+                  method="OM", 
+                  sm=couts2, 
+                  indel=1.5)
+
+
+mds2 <- cmdscale(dissim2, k=2)  # Redução para 2 dimensões
+
+mds_df_kmeans2 <- as.data.frame(mds2)
+
+colnames(mds_df_kmeans2) <- c("Dim1", 
+                             "Dim2")
+
+set.seed(123) 
+
+mds_df_kmeans2$sequencia_id <- 1:nrow(mds_df_kmeans2)
+
+
+kmeans_result2 <- kmeans(mds_df_kmeans2[, c("Dim1", "Dim2")], 
+                        centers=3) 
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans2$cluster <- as.factor(kmeans_result2$cluster)
+
+
+ggplot(mds_df_kmeans2, aes(x=Dim1, 
+                          y=Dim2, 
+                          color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), 
+             vjust=-1, 
+             hjust=0.5, 
+             size=3) +  
+  labs(title="Gráfico de Dispersão com 3 Clusters", 
+       x="Dimensão 1", 
+       y="Dimensão 2") +
+  theme_minimal()
+
+```
+
+Gráfico de índice
+
+```{r}
+seqIplot(seq2, 
+        group = kmeans_result2$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim)
+```
+
+Gráfico
+
+```{r}
+
+seqmtplot(seq2, 
+        group = kmeans_result2$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim) 
+
+```
+
+## 1.5. Rodando com amostra 3
+
+```{r}
+
+seq3 <- seqdef(amostra3[,c(-1,-7)], 
+                 alphabet = alfabeto,
+                 labels = rotulo,
+                 cnames = c("1", "2", "3", "4","5"))
+
+
+couts3 <- seqsubm(seq3, 
+                 method="CONSTANT", 
+                 cval=2)
+
+dissim3 <- seqdist(seq3, 
+                  method="OM", 
+                  sm=couts2, 
+                  indel=1.5)
+
+
+mds3 <- cmdscale(dissim3, k=2)  # Redução para 2 dimensões
+
+mds_df_kmeans3 <- as.data.frame(mds3)
+
+colnames(mds_df_kmeans3) <- c("Dim1", 
+                             "Dim2")
+
+set.seed(123) 
+
+mds_df_kmeans3$sequencia_id <- 1:nrow(mds_df_kmeans3)
+
+
+kmeans_result3 <- kmeans(mds_df_kmeans3[, c("Dim1", "Dim2")], 
+                        centers=3) 
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans3$cluster <- as.factor(kmeans_result3$cluster)
+
+
+ggplot(mds_df_kmeans3, aes(x=Dim1, 
+                          y=Dim2, 
+                          color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), 
+             vjust=-1, 
+             hjust=0.5, 
+             size=3) +  
+  labs(title="Gráfico de Dispersão com 3 Clusters", 
+       x="Dimensão 1", 
+       y="Dimensão 2") +
+  theme_minimal()
+
+```
+
+Gráfico de sequência
+
+```{r}
+
+seqIplot(seq3, 
+        group = kmeans_result3$cluster,
+        border = NA, 
+        cex.axis = 1.5, 
+        cex.lab = 1.5,
+        sortv = dissim)
+
+```
+
+Gráfico
+
+```{r}
+
+seqmtplot(seq3, 
+          group = kmeans_result3$cluster, 
+          border = NA, 
+          cex.axis = 1.5, 
+          cex.lab = 1.5, 
+          sortv = dissim)
+
 ```
