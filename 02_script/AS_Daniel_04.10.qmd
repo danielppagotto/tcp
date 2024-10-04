@@ -45,8 +45,8 @@ A base de dados utilizada neste trabalho possui **id** para grupos de indivíduo
 Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este ID_UNICO foi construído a partir da concatenação de algumas variáveis: UPA, V1008 (número de seleção do domicílio), V1014 (grupo de amostras), V2008 (dia de nascimento), V20081(mês de nascimento), V20082 (Ano de nascimento), V2007 (sexo), estrato.
 
 ```{r}
-#|warning: false
-#|eval: false
+#| warning: false
+#| eval: false
 
 # Carregando a base
 
@@ -105,7 +105,7 @@ Algumas categorias da variável ocupação (V4012) serão unidos. Todos os níve
 Tratamento para renomear categorias e incluir a categoria de fora da força de trabalho.
 
 ```{r}
-#|eval: false
+#| eval: false
 
 data <- 
   data_id_unico|> 
@@ -142,7 +142,7 @@ data_0 <-
 De acordo com os resultados, observa-se que foram retirados aqueles indivíduos que foram empregados ou servidores públicos (ESPub) assim como o Trabalhador Familiar Não Remunerado (TFNR) em algum momento. Fizemos isso apenas para tentar diminuir a complexidade das análises.
 
 ```{r}
-#|eval: false
+#| eval: false
 
 espub_tfnr <- 
             data_0 |> 
@@ -165,8 +165,8 @@ A partir da próxima subseção começamos a lidar com a análise de sequência 
 Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências.
 
 ```{r}
-#|warning: FALSE
-#|eval: false
+#| warning: false
+#| eval: false
 
 data_long <- dados_tratados |>
   select(ID_UNICO, V1016,ocupacao)
@@ -193,7 +193,7 @@ data_filtro <- data_ordem  |>
 Foram mantidos apenas aqueles indivíduos que possuem registros nos cinco trimestres, conforme o último bloco de códigos acima. Isso resultou em uma amostra de 46645 indivíduos que foram acompanhados ao longo de 5 trimestres entre 2022 e 2023.
 
 ```{r}
-#|echo: false
+#| echo: false
 
 #writexl::write_xlsx(data_filtro, "~/GitHub/tcp/01_dados/dados_22_23_tratados.xlsx")
 
@@ -630,7 +630,7 @@ seqmtplot(seq2,
 
 ```
 
-## 1.5. Rodando com amostra 3
+## 1.6. Rodando com amostra 3
 
 ```{r}
 
