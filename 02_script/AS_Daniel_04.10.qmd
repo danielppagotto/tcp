@@ -570,7 +570,7 @@ id_unico <-
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '1' ~ 'Transitório', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Necessidade'
   )) |> 
@@ -588,7 +588,7 @@ relacao_cluster |>
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '1' ~ 'Transitório', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Necessidade'
   )) |> 
@@ -607,7 +607,7 @@ escolaridade <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '1' ~ 'Transitório', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Necessidade'
   )) |> 
@@ -627,7 +627,7 @@ urbano_rural <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '1' ~ 'Transitório', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Necessidade'
   )) |> 
@@ -666,7 +666,7 @@ Renda
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '1' ~ 'Transitório', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Necessidade'
   )) |> 
