@@ -59,10 +59,10 @@ data_1 <- vroom::vroom("~/GitHub/tcp/tcp_5trimestres.csv",
 data_2022_2023 <- data_1 |>   
                     select(id, Ano, Trimestre, UF, 
                            UPA, Estrato, 
-                           V1008,V4012,V1014, 
-                           V1016, V2008, V20081, 
+                           V1008,V4012,V1014,V1022,
+                           V1016, V2007, V2008, V20081, 
                            V20082, V2007, V2009,
-                           VD4001,VD4002) |>  
+                           VD4001,VD4002, VD3004, V4039) |>  
                     filter(V2009 >= 14, 
                            Ano %in% c(2022, 2023))
 
@@ -86,21 +86,21 @@ data_id_unico <- data_id |>
 
 Algumas categorias da variável ocupação (V4012) serão unidos. Todos os níveis serão renomeados com iniciais de suas respectivas descrição. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002) foram agregadas à variável V4012 com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho. A tabela abaixo sintetiza estes tratamentos.
 
-+--------------------------------------+----------------------------+---------------+
-| Antes do tratamento                  | Após o tratamento          | Abreviação    |
-+======================================+:==========================:+:=============:+
-| -   Empregado do setor privado.      | Empregado do setor privado | ESPR          |
-|                                      |                            |               |
-| -   Trabalhador doméstico.           |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT           |
-|                                      |                            |               |
-| -   Pessoa desocupada                |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Conta própria.                   | Conta própria              | CP            |
-+--------------------------------------+----------------------------+---------------+
-| -   Empregador                       | Empregador                 | EMP           |
-+--------------------------------------+----------------------------+---------------+
++--------------------------------------+----------------------------+--------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação   |
++======================================+:==========================:+:============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
+|                                      |                            |              |
+| -   Trabalhador doméstico.           |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
+|                                      |                            |              |
+| -   Pessoa desocupada                |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Conta própria.                   | Conta própria              | CP           |
++--------------------------------------+----------------------------+--------------+
+| -   Empregador                       | Empregador                 | EMP          |
++--------------------------------------+----------------------------+--------------+
 
 Tratamento para renomear categorias e incluir a categoria de fora da força de trabalho.
 
@@ -173,7 +173,8 @@ data_long <- dados_tratados |>
 
 #Transformando a estrutura de dados para wide
 data_wide <- data_long |> 
-  pivot_wider(names_from = V1016, values_from = ocupacao,
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
               values_fn = list)
 
 # Colocando as colunas em ordem de entrevista e para caracteres
@@ -527,7 +528,7 @@ ggplot(mds_df_kmeans, aes(x=Dim1,
 
 ```
 
-sObserva-se que o cluster 1 é caracterizado por ter prevalência de trajetórias que transitam entre o TCP e o emprego privado. O cluster 2 é caracterizado por ser um TCP persistente. O cluster 3 é caracterizado por ser um TCP transita com o perfil fora da força de trabalho.
+Observa-se que o cluster 1 é caracterizado por ter prevalência de trajetórias que transitam entre o TCP e o emprego privado. O cluster 2 é caracterizado por ser um TCP persistente. O cluster 3 é caracterizado por ser um TCP transita com o perfil fora da força de trabalho.
 
 ```{r}
 
@@ -550,6 +551,108 @@ seqmtplot(seq,
         cex.axis = 1.5, 
         cex.lab = 1.5,
         sortv = dissim)
+```
+
+### 1.4.3. Juntando base original aos clusters 
+
+```{r}
+
+relacao_cluster <- kmeans_result[["cluster"]]
+
+relacao_cluster <- cbind(base_join, relacao_cluster)
+
+id_unico <- 
+  data_id_unico |> 
+  distinct(ID_UNICO, .keep_all = TRUE)
+
+
+relacao_cluster |> 
+  left_join(id_unico, by = "ID_UNICO") |> 
+  mutate(relacao_cluster = case_when(
+                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '2' ~ 'Persistente',
+                              relacao_cluster == '3' ~ 'Necessidade'
+  )) |> 
+  group_by(relacao_cluster, V2007) |> 
+  count()
+  
+
+
+```
+
+```{r}
+
+relacao_cluster |> 
+  left_join(id_unico, by = "ID_UNICO") |> 
+  mutate(relacao_cluster = case_when(
+                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '2' ~ 'Persistente',
+                              relacao_cluster == '3' ~ 'Necessidade'
+  )) |> 
+  group_by(relacao_cluster) |> 
+  summarise(idade_media = mean(V2009))
+
+
+
+```
+
+Escolaridade
+
+```{r}
+
+escolaridade <- 
+  relacao_cluster |> 
+  left_join(id_unico, by = "ID_UNICO") |> 
+  mutate(relacao_cluster = case_when(
+                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '2' ~ 'Persistente',
+                              relacao_cluster == '3' ~ 'Necessidade'
+  )) |> 
+  group_by(relacao_cluster, VD3004) |> 
+  count() |> 
+  group_by(relacao_cluster) |> 
+  mutate(percentual = n / sum(n) * 100)
+
+```
+
+Urbano e Rural
+
+```{r}
+
+
+urbano_rural <- 
+  relacao_cluster |> 
+  left_join(id_unico, by = "ID_UNICO") |> 
+  mutate(relacao_cluster = case_when(
+                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '2' ~ 'Persistente',
+                              relacao_cluster == '3' ~ 'Necessidade'
+  )) |> 
+  group_by(relacao_cluster, V1022) |> 
+  count() |> 
+  group_by(relacao_cluster) |> 
+  mutate(percentual = n / sum(n) * 100)
+
+```
+
+Estados
+
+```{r}
+
+uf <- 
+  relacao_cluster |> 
+  left_join(id_unico, by = "ID_UNICO") |> 
+  mutate(relacao_cluster = case_when(
+                              relacao_cluster == '1' ~ 'Oportunidade', 
+                              relacao_cluster == '2' ~ 'Persistente',
+                              relacao_cluster == '3' ~ 'Necessidade'
+  )) |> 
+  group_by(relacao_cluster, UF) |> 
+  count() |> 
+  group_by(relacao_cluster) |> 
+  mutate(percentual = n / sum(n) * 100)
+
+
 ```
 
 ## 1.5. Rodando com amostra 2
