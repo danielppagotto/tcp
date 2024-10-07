@@ -1,7 +1,7 @@
 
 library(tidyverse)
 
-load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2021_2023.RData")
+load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc21-23.RData")
 
 dados21_23 <- 
   dados_completos |> 
@@ -16,7 +16,7 @@ dados21_23 <-
          V40431, V4044, V4046, V4049, V4050, V4056, 
          V4056C, V4057, V4058, V4062, V4062C, VD3004, 
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
-         VD3004, VD3005, VD4010, VD4011)
+         VD3004, VD3005, VD4010, VD4011, VD4019)
 
 load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc19-20.RData")
 
@@ -33,7 +33,7 @@ dados19_20 <-
          V40431, V4044, V4046, V4049, V4050, V4056, 
          V4056C, V4057, V4058, V4062, V4062C, VD3004, 
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
-         VD3004, VD3005, VD4010, VD4011)
+         VD3004, VD3005, VD4010, VD4011, VD4019)
 
 load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc17_18.RData")
 
@@ -50,27 +50,27 @@ dados17_18 <-
          V40431, V4044, V4046, V4049, V4050, V4056, 
          V4056C, V4057, V4058, V4062, V4062C, VD3004, 
          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
-         VD3004, VD3005, VD4010, VD4011)
+         VD3004, VD3005, VD4010, VD4011, VD4019)
 
-load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2014_2016.RData")
+# load("C:/Users/Lapei_Cigets/Desktop/PNADC/pnadc_2014_2016.RData")
+# 
+# dados14_16 <- 
+#   dados_completos |> 
+#   select(Ano, Trimestre, UF, Capital, RM_RIDE, 
+#          UPA, Estrato, V1008, V1014, V1016, V1022,
+#          V1023, V1027, V1028, V2001, V2003, V2007,
+#          V2008, V20081, V20082, V2009, V2010, VD4001,
+#          VD4002, VD4003, VD4004, VD4004A, V4009, V4010, 
+#          V4012, V4015, V40151, V4016, V4017, V40171, 
+#          V4018, V4019, V4020, V4021, V4022, V4032, 
+#          V4033, V4039, V4039C, V4040, V4041, V4043, 
+#          V40431, V4044, V4046, V4049, V4050, V4056, 
+#          V4056C, V4057, V4058, V4062, V4062C, VD3004, 
+#          VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
+#          VD3004, VD3005, VD4010, VD4011)
+# 
 
-dados14_16 <- 
-  dados_completos |> 
-  select(Ano, Trimestre, UF, Capital, RM_RIDE, 
-         UPA, Estrato, V1008, V1014, V1016, V1022,
-         V1023, V1027, V1028, V2001, V2003, V2007,
-         V2008, V20081, V20082, V2009, V2010, VD4001,
-         VD4002, VD4003, VD4004, VD4004A, V4009, V4010, 
-         V4012, V4015, V40151, V4016, V4017, V40171, 
-         V4018, V4019, V4020, V4021, V4022, V4032, 
-         V4033, V4039, V4039C, V4040, V4041, V4043, 
-         V40431, V4044, V4046, V4049, V4050, V4056, 
-         V4056C, V4057, V4058, V4062, V4062C, VD3004, 
-         VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
-         VD3004, VD3005, VD4010, VD4011)
-
-
-todos_anos <- rbind(dados14_16,
+todos_anos <- rbind(#dados14_16,
                     dados17_18,
                     dados19_20,
                     dados21_23)
@@ -143,7 +143,7 @@ tcp_5trim <-
   pnadc_tcp_todos |> 
   filter(id %in% vetor_tcp5)
 
-# write.csv(tcp_5trim,"tcp_5trimestres.csv")
+write.csv(tcp_5trim,"tcp_5trimestres.csv")
 
 # Pegando apenas pessoas que tiveram 8 entrevistas ou mais 
 
