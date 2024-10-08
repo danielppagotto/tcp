@@ -50,7 +50,7 @@ Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este 
 
 # Carregando a base
 
-data_1 <- vroom::vroom("C:/Users/alefs/Downloads/tcp_5trimestres.csv",
+data_1 <- vroom::vroom("~/GitHub/tcp/tcp_5trimestres.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 
@@ -63,7 +63,7 @@ data_2022_2023 <- data_1 |>
                            V1016, V2007, V2008, V20081, 
                            V20082, V2007, V2009,
                            VD4001,VD4002, VD3004, V4039,
-                           VD4010, V4032, V4019) |>  
+                           VD4010, V4032, V4019, VD4019) |>  
                     filter(V2009 >= 14, 
                            Ano %in% c(2022, 2023))
 
@@ -199,7 +199,7 @@ Foram mantidos apenas aqueles indivíduos que possuem registros nos cinco trimes
 
 #writexl::write_xlsx(data_filtro, "~/GitHub/tcp/01_dados/dados_22_23_tratados.xlsx")
 
-data_filtro <- readxl::read_excel("~/GitHub/tcp/01_dados/dados_22_23_tratados.xlsx")
+#data_filtro <- readxl::read_excel("~/GitHub/tcp/01_dados/dados_22_23_tratados.xlsx")
 
 ```
 
@@ -368,7 +368,10 @@ couts <- seqsubm(seq,
 dissim <- seqdist(seq, 
                   method="OM", 
                   sm=couts, 
-                  indel=1.5)
+                  indel=1.5,
+                  full.matrix = FALSE)
+
+
 
 ```
 
@@ -536,8 +539,6 @@ Observa-se que o cluster 1 é caracterizado por ter prevalência de trajetórias
 seqIplot(seq, 
         group = kmeans_result$cluster,
         border = NA, 
-        cex.axis = 1.5, 
-        cex.lab = 1.5,
         sortv = dissim)
 
 ```
@@ -549,9 +550,8 @@ Os gráficos abaixo evideciam os resultados dos gráficos anteriores.
 seqmtplot(seq, 
         group = kmeans_result$cluster,
         border = NA, 
-        cex.axis = 1.5, 
-        cex.lab = 1.5,
         sortv = dissim)
+
 ```
 
 ### 1.4.3. Juntando base original aos clusters
@@ -564,16 +564,17 @@ relacao_cluster <- cbind(base_join, relacao_cluster)
 
 id_unico <- 
   data_id_unico |> 
-  distinct(ID_UNICO, .keep_all = TRUE)
+  distinct(ID_UNICO, 
+           .keep_all = TRUE)
 
 
-relacao_cluster |> 
+sexo <- relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
-  mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Transitório', 
-                              relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Necessidade'
-  )) |> 
+  mutate(relacao_cluster = 
+           case_when(
+                relacao_cluster == '1' ~ 'Necessidade', 
+                relacao_cluster == '2' ~ 'Persistente',
+                relacao_cluster == '3' ~ 'Transitório')) |> 
   group_by(relacao_cluster, V2007) |> 
   count() |> 
   group_by(relacao_cluster) |> 
@@ -588,12 +589,13 @@ relacao_cluster |>
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Transitório', 
+                              relacao_cluster == '1' ~ 'Necessidade', 
                               relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Necessidade'
+                              relacao_cluster == '3' ~ 'Transitório'
   )) |> 
   group_by(relacao_cluster) |> 
-  summarise(idade_media = mean(V2009))
+  summarise(idade_media = mean(V2009)) |> 
+  mutate(idade_media = round(idade_media, 2))
 
 
 
@@ -607,14 +609,22 @@ escolaridade <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Transitório', 
+                              relacao_cluster == '1' ~ 'Necessidade', 
                               relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Necessidade'
+                              relacao_cluster == '3' ~ 'Transitório'
   )) |> 
   group_by(relacao_cluster, VD3004) |> 
   count() |> 
   group_by(relacao_cluster) |> 
-  mutate(percentual = n / sum(n) * 100)
+  mutate(percentual = n / sum(n) * 100) |> 
+  mutate(escolaridade = case_when(
+                            VD3004 == 'Fundamental completo ou equivalente' | VD3004 == 'Fundamental incompleto ou equivalente' ~ 'Até fundamental completo', 
+                            VD3004 == 'Médio completo ou equivalente' | VD3004 == 'Médio incompleto ou equivalente' ~ 'Até médio completo', 
+                            VD3004 == 'Sem instrução e menos de 1 ano de estudo' ~ 'Sem instrução', 
+                            VD3004 == 'Superior completo' | VD3004 == 'Superior incompleto ou equivalente' ~ 'Até superior completo' 
+  )) |> 
+  group_by(relacao_cluster, escolaridade) |> 
+  summarise(percentual = sum(percentual))
 
 ```
 
@@ -627,9 +637,9 @@ urbano_rural <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Transitório', 
+                              relacao_cluster == '1' ~ 'Necessidade', 
                               relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Necessidade'
+                              relacao_cluster == '3' ~ 'Transitório'
   )) |> 
   group_by(relacao_cluster, V1022) |> 
   count() |> 
@@ -666,9 +676,9 @@ Renda
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Transitório', 
+                              relacao_cluster == '1' ~ 'Necessidade', 
                               relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Necessidade'
+                              relacao_cluster == '3' ~ 'Transitório'
   )) |> 
   group_by(relacao_cluster) |> 
   summarise(renda = mean(VD4019, na.rm = TRUE))
@@ -735,8 +745,6 @@ Gráfico de índice
 seqIplot(seq2, 
         group = kmeans_result2$cluster,
         border = NA, 
-        cex.axis = 1.5, 
-        cex.lab = 1.5,
         sortv = dissim)
 ```
 
@@ -814,8 +822,6 @@ Gráfico de sequência
 seqIplot(seq3, 
         group = kmeans_result3$cluster,
         border = NA, 
-        cex.axis = 1.5, 
-        cex.lab = 1.5,
         sortv = dissim)
 
 ```
@@ -847,11 +853,6 @@ Novamente utilizando ID_UNICO construído a partir da concatenação de algumas 
 
 # Carregando a base
 
-data_1 <- vroom::vroom("C:/Users/alefs/Downloads/tcp_5trimestres.csv",
-                       progress = FALSE,
-                       show_col_types = FALSE)
-
-# Filtrando os anos de 2022 e 2023 e filtrando pessoas maiores que 14 anos
 
 data_2018_2019 <- data_1 |>   
                     select(id, Ano, Trimestre, UF, 
@@ -860,7 +861,7 @@ data_2018_2019 <- data_1 |>
                            V1016, V2007, V2008, V20081, 
                            V20082, V2007, V2009,
                            VD4001,VD4002, VD3004, V4039,
-                           VD4010, V4032, V4019) |>  
+                           VD4010, V4032, V4019, VD4019) |>  
                     filter(V2009 >= 14, 
                            Ano %in% c(2018, 2019))
 
@@ -993,7 +994,7 @@ Foram mantidos apenas aqueles indivíduos que possuem registros nos cinco trimes
 
 #writexl::write_xlsx(data_filtro_18_19, "~/GitHub/tcp/01_dados/data_filtro_18_19.xlsx")
 
-data_filtro <- readxl::read_excel("~/GitHub/tcp/01_dados/dados_18_19_tratados.xlsx")
+#data_filtro <- readxl::read_excel("~/GitHub/tcp/01_dados/dados_18_19_tratados.xlsx")
 ```
 
 ### 2.2.1. Separando uma amostra aleatória para alguns testes
@@ -1221,8 +1222,6 @@ Observa-se que o cluster 1 é caracterizado por ter prevalência de trajetórias
 seqIplot(seq_18_19, 
         group = kmeans_result_18_19$cluster,
         border = NA, 
-        cex.axis = 1.5, 
-        cex.lab = 1.5,
         sortv = dissim_18_19)
 ```
 
