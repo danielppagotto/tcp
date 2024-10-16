@@ -112,7 +112,7 @@ data <-
   data_id_unico|> 
   mutate(V4012_ajust = 
            case_when(
-                V4012 == "Conta própria" ~ "CP",
+                V4012 == "Conta própria"  ~ "EMP",
                 V4012 == "Empregado do setor privado" ~ "ESPriv",
                 V4012 == "Trabalhador doméstico" ~ "ESPriv",
                 V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
@@ -169,7 +169,8 @@ Nesta etapa, os processos são codificados em sequências. Precisamos deixar os 
 #| warning: false
 #| eval: false
 
-data_long <- dados_tratados |>
+data_long <- 
+  dados_tratados |>
   select(ID_UNICO, V1016,ocupacao)
 
 #Transformando a estrutura de dados para wide
@@ -186,8 +187,8 @@ data_ordem <- data_wide|>
 # id_seq foi criada apenas para ter mais uma coluna de identificação 
 
 data_filtro <- data_ordem  |> 
-  filter(if_all(2:6, ~ . != "NULL")) |>  # Remove linhas ond
-  filter(rowSums(across(2:6, ~ . != "CP")) < 5) |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(rowSums(across(2:6, ~ . != "EMP")) < 5) |> 
   mutate(id_seq = row_number())
 
 ```
@@ -218,7 +219,7 @@ total_observations <- data_filtro |> nrow()
 # Gera a primeira amostra aleatória de 5000 observações
 
 sample1_ids <- sample(1:total_observations, 
-                      size = 5000, 
+                      size = 6000, 
                       replace = FALSE)
 
 # Retira da população as observações da primeira amostra e gera a segunda amostra de 5000 observações
@@ -227,14 +228,14 @@ remaining_ids <- setdiff(1:total_observations,
                          sample1_ids)
 
 sample2_ids <- sample(remaining_ids, 
-                      size = 5000, 
+                      size = 6000, 
                       replace = FALSE)
 
 # Retira da população as observações das duas primeiras amostras e gera a terceira amostra de 5000 observações
 remaining_ids <- setdiff(remaining_ids, sample2_ids)
 
 sample3_ids <- sample(remaining_ids, 
-                      size = 5000, 
+                      size = 6000, 
                       replace = FALSE)
 
 # Filtra as três amostras dos dataframes originais
@@ -259,12 +260,12 @@ Aqui observaremos algumas análises exploratórias sobre a sequência da amostra
 # Objeto de sequência
 
 # Alfabeto
-alfabeto <- c("CP", 
+alfabeto <- c(#"CP", 
               "PFT", 
               "ESPriv", 
               "EMP")
 # Rótulos
-rotulo <- c("CP", 
+rotulo <- c(#"CP", 
             "PFT", 
             "ESPriv", 
             "EMP")
@@ -369,7 +370,7 @@ dissim <- seqdist(seq,
                   method="OM", 
                   sm=couts, 
                   indel=1.5,
-                  full.matrix = FALSE)
+                  full.matrix = TRUE)
 
 
 
@@ -572,7 +573,7 @@ sexo <- relacao_cluster |>
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = 
            case_when(
-                relacao_cluster == '1' ~ 'Necessidade', 
+                relacao_cluster == '1' ~ 'Precarizado', 
                 relacao_cluster == '2' ~ 'Persistente',
                 relacao_cluster == '3' ~ 'Transitório')) |> 
   group_by(relacao_cluster, V2007) |> 
@@ -589,7 +590,7 @@ sexo <- relacao_cluster |>
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Necessidade', 
+                              relacao_cluster == '1' ~ 'Precarizado', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Transitório'
   )) |> 
@@ -609,7 +610,7 @@ escolaridade <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Necessidade', 
+                              relacao_cluster == '1' ~ 'Precarizado', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Transitório'
   )) |> 
@@ -637,7 +638,7 @@ urbano_rural <-
   relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Necessidade', 
+                              relacao_cluster == '1' ~ 'Precarizado', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Transitório'
   )) |> 
@@ -658,7 +659,7 @@ uf <-
   mutate(relacao_cluster = case_when(
                               relacao_cluster == '1' ~ 'Transitório - empregado', 
                               relacao_cluster == '2' ~ 'Persistente',
-                              relacao_cluster == '3' ~ 'Transitório - PFT'
+                              relacao_cluster == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster, UF) |> 
   count() |> 
@@ -676,7 +677,7 @@ Renda
 relacao_cluster |> 
   left_join(id_unico, by = "ID_UNICO") |> 
   mutate(relacao_cluster = case_when(
-                              relacao_cluster == '1' ~ 'Necessidade', 
+                              relacao_cluster == '1' ~ 'Precarizado', 
                               relacao_cluster == '2' ~ 'Persistente',
                               relacao_cluster == '3' ~ 'Transitório'
   )) |> 
@@ -1253,7 +1254,7 @@ relacao_cluster_18_19 |>
   mutate(relacao_cluster_18_19 = case_when(
                               relacao_cluster_18_19 == '1' ~ 'Transitório', 
                               relacao_cluster_18_19 == '2' ~ 'Persistente',
-                              relacao_cluster_18_19 == '3' ~ 'Necessidade'
+                              relacao_cluster_18_19 == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster_18_19, V2007) |> 
   count() |> 
@@ -1267,7 +1268,7 @@ relacao_cluster_18_19 |>
   mutate(relacao_cluster_18_19 = case_when(
                               relacao_cluster_18_19 == '1' ~ 'Transitório', 
                               relacao_cluster_18_19 == '2' ~ 'Persistente',
-                              relacao_cluster_18_19 == '3' ~ 'Necessidade'
+                              relacao_cluster_18_19 == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster_18_19) |> 
   summarise(idade_media = mean(V2009))
@@ -1283,7 +1284,7 @@ escolaridade_18_19 <-
   mutate(relacao_cluster_18_19 = case_when(
                               relacao_cluster_18_19 == '1' ~ 'Transitório', 
                               relacao_cluster_18_19 == '2' ~ 'Persistente',
-                              relacao_cluster_18_19 == '3' ~ 'Necessidade'
+                              relacao_cluster_18_19 == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster_18_19, VD3004) |> 
   count() |> 
@@ -1300,7 +1301,7 @@ urbano_rural <-
   mutate(relacao_cluster_18_19 = case_when(
                               relacao_cluster_18_19 == '1' ~ 'Transitório', 
                               relacao_cluster_18_19 == '2' ~ 'Persistente',
-                              relacao_cluster_18_19 == '3' ~ 'Necessidade'
+                              relacao_cluster_18_19 == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster_18_19, V1022) |> 
   count() |> 
@@ -1334,7 +1335,7 @@ relacao_cluster_18_19 |>
   mutate(relacao_cluster_18_19 = case_when(
                               relacao_cluster_18_19 == '1' ~ 'Transitório', 
                               relacao_cluster_18_19 == '2' ~ 'Persistente',
-                              relacao_cluster_18_19 == '3' ~ 'Necessidade'
+                              relacao_cluster_18_19 == '3' ~ 'Precarizado'
   )) |> 
   group_by(relacao_cluster_18_19) |> 
   summarise(renda = mean(VD4019, na.rm = TRUE))

@@ -1,0 +1,730 @@
+---
+title: "Sequence Analysis"
+format: html
+editor: visual
+---
+
+## Sequence Analysis
+
+## 1. Análise de sequência: Atividade principal e amostragem delimitada
+
+Anteriormente (em outro script), foi levantado dados da Pnad Contínua referente a todos os trimestres entre 2014 e 2023. E filtrado apenas aqueles domicílios que excerceram trabalho como "Conta própria" ao menos uma vez durante as 5 amostragens em que foram submetidos, seja como trabalho principal ou secundário. Isso resultou em 2.392.205 observações.
+
+A partir dessa base gerada, iremos tratá-la de forma a realizar a análise de sequências (Sequence Analysis).
+
+### 1.1 Preparando a base para análise
+
+Abaixo, as biblioteca que serão necessáris.
+
+```{r}
+#| warning: false
+
+options(scipen = 999)
+
+# install.packages("TraMineR")
+library(TraMineR)
+library(tidyverse)
+library(cluster)
+library(TraMineRextras)
+library(WeightedCluster)
+library(FactoMineR)
+library(ade4)
+library(RColorBrewer)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(seqhandbook)
+
+
+```
+
+Em seguida, importaremos a base gerada anteriormente e aplicaremos algumas transformações:
+
+1\. Criaremos uma variável ID_UNICO alternativa com as mesmas variáveis utilizadas no script anterior, mas separado por "\_" de forma a identificar o domicílio.\
+2. Adicionaremos uma variável conjulgando o trimestre e ano separados por "-".
+
+```{r}
+#abrindo a base
+data <- read.csv("C:/Users/alefs/Downloads/tcp_5trimestres.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+
+#criando a variável ID_UNICO
+data <- data %>%
+  mutate(ID_UNICO = paste(UPA, V1008, V1014, V2008, V20081, V20082, genero, Estrato, sep = "_")) %>%
+  relocate(ID_UNICO, .before = Capital)
+
+#Criando a variável Trimestre_Ano
+data <- data %>%
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, sep = "-"), .before = UF)
+```
+
+Abaixo filtraremos apenas um grupo de amostragem, aqueles que tiveram a primeira entrevista no primeiro trimestre de 2017 e a última no primeiro trimestre de 2018. Excluiremos as variáveis ano e trimestre, que já estão contempladas na variável Trimestre_Ano. E por último, selecionaremos apenas as variáveis de interesse: ID_UNICO, Trimestre_Ano e V4012 (trabalho principal).
+
+```{r}
+
+# Selecionando apenas um grupo de amostragem
+data_grupo <- data |> 
+  filter(
+    (Trimestre_Ano == "1-2017" & V1016 == 1) |
+      (Trimestre_Ano == "2-2017" & V1016 == 2) |
+      (Trimestre_Ano == "3-2017" & V1016 == 3) |
+      (Trimestre_Ano == "4-2017" & V1016 == 4) |
+      (Trimestre_Ano == "1-2018" & V1016 == 5)
+  )
+
+#Removendo as colunas Ano e Trimestre
+data_tratado <- data_grupo %>%
+  select(-Ano, - Trimestre)
+
+#Selecionando apenas as variáveis de interesse
+data_tratado <- data_tratado |> 
+  select(ID_UNICO, V4012, Trimestre_Ano)
+
+#Visualizando a base
+head(data_tratado, 10)
+```
+
+\
+A seguir, renomearemos as observações da variável V4012 da seguinte forma:\
+\
+Conta própria = CP\
+Empregado do setor privado = ESPR\
+Empregado do setor público (inclusive empresas de economia mista) = ESPU\
+Empregador = EMP\
+Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar = MILITAR\
+Trabalhador doméstico = TD\
+Trabalhador familiar não remunerado = TFNR
+
+Isso será importante para podermos gerar os gráficos e obter uma boa visualização.
+
+```{r}
+#Renomeando
+data_tratado <- data_tratado |> 
+  mutate(V4012 = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Empregador" ~ "EMP",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "MILITAR",
+    V4012 == "Trabalhador doméstico" ~ "TD",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    TRUE ~ V4012  # manter os valores que não correspondem a nenhum dos especificados
+  ))
+
+#Visualizando
+data_tratado |> 
+  group_by(V4012) |> 
+  count()
+```
+
+Agora iremos desimpilhar (longo para largo) a base de forma a comportá-la futuramente na função do pacote TraMineR. Também retiraremos os domicílios que em algum momento da amostragem não respondeu à variável V4012 .
+
+```{r}
+#Desimpilhando a base
+data_tratado <- data_tratado |> 
+  pivot_wider(names_from = Trimestre_Ano, values_from = V4012)
+
+#Removendo todos os domicílios que tiverem ao menos um valor ausente
+data_wide <- data_tratado |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+head(data_wide, 10)
+```
+
+Ao visualizar o dataframe é possível perceber uma séria de problemas que precisam ser tratados. A primeira coisa é transformar as variáveis temporais em formato character.
+
+```{r}
+#Alterando o formato das variáveis temporais
+data_wide <- data_wide |> 
+  mutate(`1-2017` = as.character(`1-2017`)) |> 
+  mutate(`2-2017` = as.character(`2-2017`)) |> 
+  mutate(`3-2017` = as.character(`3-2017`)) |> 
+  mutate(`4-2017` = as.character(`4-2017`)) |> 
+  mutate(`1-2018` = as.character(`1-2018`))
+
+head(data_wide, 10)
+```
+
+A próxima falha é a persistência de duplicidade após a criação da variável ID_UNICO de domícilios que geram resultados iniciados com "c(". Para isso, criaremos uma variável temporária de índice para facilitar o tratamento dos dados.
+
+Após isso, identificamos que os seguintes índices resultaram em duplicidades:\
+7337
+
+Além disso, existem outros valores como "Null", referentes aos seguintes índices:\
+348, 4695
+
+Por fins de simplificação e por não representar muitas observações, optaremos por retira-los da base.
+
+Além disso, foi observado alguns domícilios que não exerceram trabalho como "Conta própria" em nenhum trimestre (715 domicílios), e por simpliicidade e convergência com a proposta de análise, também os removeremos da base.
+
+```{r}
+#Criando variável índice
+data_wide$ID_INDEX <- as.numeric(factor(data_wide$ID_UNICO))
+
+#Retirando da base variáveis problemáticas
+data_wide <- data_wide %>%
+  filter(!ID_INDEX %in% c(7337, 348, 4695)) |> 
+  relocate(ID_INDEX, .before = ID_UNICO)
+
+# Retirando que não atuaram como Conta Própria
+data_final <- data_wide %>%
+  filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_temporario <- data_final %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
+```
+
+### 1.2 Resultados
+
+Agora que temos a base tratada, iremos utiliza-la para gerar os gráficos do Sequence Analysis. Primeiramente, iremos definir as variáveis temporais na função seqdef, para que as demais funções reconheça as variáveis temporais.
+
+Depois a utilizaremos para gerar primeiro o gráfico com as 10 primeiras sequências do dataframe. O segundo gráfico irá mostrar a frequência relativa de cada observação distinta durante as 5 entrevistas. O terceiro gráfico conterá todas as sequências da base de dados. E por último, as 10 sequências mais frequentes com suas referidas participações relativas.
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq <- seqdef(data_final, var = 3:7)
+
+
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq, with.legend = "right")
+
+
+```
+
+```{r}
+#Exibindo as frequências relativas dos grupos
+seqdplot(actcal.seq, with.legend = "right", border = NA)
+
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq, with.legend = "right")
+```
+
+```{r}
+# Para construção da matriz de dissimilaridades
+ 
+couts <- seqsubm(actcal.seq, method="CONSTANT", cval=2)
+dissim <- seqdist(actcal.seq, method="OM", sm=couts, indel=1.5)
+```
+
+```{r}
+# Agrupamento aglomerativo hierárquico
+agnes <- as.dist(dissim) %>% agnes(method="ward", keep.diss=FALSE)
+```
+
+```{r}
+# dendrogram
+as.dendrogram(agnes) %>% plot(leaflab="none")
+```
+
+```{r}
+# Dendograma e o gráfico de ídices
+seq_heatmap(actcal.seq, agnes)
+
+```
+
+```{r}
+# Indicadores para qualidade da partição
+wardRange <- as.clustrange(agnes, diss=dissim)
+summary(wardRange, max.rank=2)
+
+```
+
+```{r}
+# Qualidade da partição para os indicadores 
+plot(wardRange, stat=c('ASW','R2','CH','HG'), norm="zscore")
+```
+
+```{r}
+# Escolher sete clustering (A árvore será cortada, formar 7)
+
+nbcl <- 7
+part <- cutree(agnes, nbcl)
+
+```
+
+```{r}
+# Consolidar a partição
+newpart <- wcKMedoids(dissim, k=nbcl, initialclust=part, cluster.only=TRUE)
+table(part, newpart)
+
+```
+
+```{r}
+# O R^2 aqui vai de 61% a 64%
+
+wcClusterQuality(dissim, part)$stats['R2sq'] %>% round(3)
+
+```
+
+```{r}
+# Ver a proposta de uma nova partição
+wcClusterQuality(dissim, newpart)$stats['R2sq'] %>% round(3)
+```
+
+```{r}
+# Optar pela nova partição
+part_1 <- as.numeric(as.factor(newpart))
+```
+
+```{r}
+# Representação gráfica(distribuição estadual) da natureza dos clusters. 
+
+png("seu_grafico.png", width = 800, height = 600)
+seqdplot(actcal.seq, group=part_1, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-novo" ,cex.legend=0.9)
+dev.off()
+```
+
+```{r}
+# plotando com a partição antiga para testar
+png("seu_grafico.png", width = 800, height = 600)
+seqdplot(actcal.seq, group=part, xtlab=1:5, border=NA,main = "Cluster da distribuição dos estados-antigo",cex.legend=0.9)
+dev.off()
+```
+
+```{r}
+# Representação gráfica(índices) da natureza dos clusters
+png("seu_grafico.png", width = 800, height = 600)
+seqIplot(actcal.seq, group=part_1, xtlab=1:5, yaxis=FALSE,main = "Cluster dos índices",cex.legend=0.9)
+dev.off()
+```
+
+OBS. Não esquecer de verificar outras formas mais suavizafas
+
+```{r}
+# As dez frequências mais frequentes (com espessura proporcional a sua frequência)
+png("seu_grafico.png", width = 800, height = 600)
+seqfplot(actcal.seq, group=part_1, ylab="", xtlab=1:5,main = "Dez mais frequentes-proporcionais",cex.legend=0.9)
+dev.off()
+```
+
+```{r}
+# Gráfico de posição modal representando para cada cluster, a sequênica de estados modais para cada posição no tempo.
+png("seu_grafico.png", width = 800, height = 600)
+seqmsplot(actcal.seq, group=part_1, xtlab=1:5, cex.legend=0.9,
+          main = "Posição modal")
+dev.off()
+```
+
+Tipologias estatíticas (exemplo)
+
+```{r}
+
+```
+
+## 2. Análise de sequência: Atividade secundária e amostragem delimitada.
+
+Repetiremos a análise acima, mas para atividade secundária e mantendo a mesma amostragem delimitada (1-2017 à 1-2018).
+
+### 2.1 Preparando a base para análise
+
+Iremos partir do dataframe data_grupo, e selecionaremos a variável V4043 (atividade secundário) no lugar da variável V4012 (atividade principal).
+
+```{r}
+#Removendo as colunas Ano e Trimestre
+data_tratado_secundario <- data_grupo %>%
+  select(-Ano, - Trimestre)
+
+#Selecionando apenas as variáveis de interesse
+data_tratado_secundario <- data_tratado_secundario |> 
+  select(ID_UNICO, V4043, Trimestre_Ano)
+
+#Visualizando a base
+head(data_tratado_secundario, 10)
+```
+
+A seguir renomearemos as observações da variável V4012.
+
+```{r}
+#Renomeando
+data_tratado_secundario <- data_tratado_secundario |> 
+  mutate(V4043 = case_when(
+    V4043 == "Conta própria" ~ "CP",
+    V4043 == "Empregado do setor privado" ~ "ESPR",
+    V4043 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4043 == "Empregador" ~ "EMP",
+    V4043 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "MILITAR",
+    V4043 == "Trabalhador doméstico" ~ "TD",
+    V4043 == "Trabalhador não remunerado em ajuda a membro do domicílio ou parente" ~ "TFNR",
+    TRUE ~ V4043  # manter os valores que não correspondem a nenhum dos especificados
+  ))
+
+#Visualizando
+data_tratado_secundario |> 
+  group_by(V4043) |> 
+  count()
+```
+
+Abaixo aplicaremos a transformação da estrutura dos dados de longo para largo, e excluiremos os domicílios que contiverem valor ausente. E já ajustaremos o formato das variáveis temporais para podermos visualizar o dataframe.
+
+```{r}
+#Desimpilhando a base
+data_tratado_secundario <- data_tratado_secundario |> 
+  pivot_wider(names_from = Trimestre_Ano, values_from = V4043)
+
+#Removendo todos os domicílios que tiverem ao menos um valor ausente
+data_wide_secundario <- data_tratado_secundario |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+#Alterando o formato das variáveis temporais
+data_wide_secundario <- data_wide_secundario |> 
+  mutate(`1-2017` = as.character(`1-2017`)) |> 
+  mutate(`2-2017` = as.character(`2-2017`)) |> 
+  mutate(`3-2017` = as.character(`3-2017`)) |> 
+  mutate(`4-2017` = as.character(`4-2017`)) |> 
+  mutate(`1-2018` = as.character(`1-2018`))
+
+head(data_wide_secundario, 10)
+```
+
+Aqui não houve duplicidades. Removeremos os domicílios que não exerceram atividade secundário como "Conta própria" em nenhuma das entrevistas (9 domícilios)
+
+```{r}
+#Criando variável índice
+data_wide_secundario$ID_INDEX <- as.numeric(factor(data_wide_secundario$ID_UNICO))
+
+
+# Retirando que não atuaram como Conta Própria
+data_final_secundario <- data_wide_secundario %>%
+  filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_secundario_temporario <- data_final_secundario %>%
+  filter(rowSums(across(2:6, ~ . == "CP")) < 5)
+```
+
+### 2.2 Resultados
+
+Por fim, geraremos os gráficos do Sequence Analysis, definindo as variáveis temporais e a utilizando para gerar os gráficos, como feito anteriormente.
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq_sec <- seqdef(data_final_secundario, var = 2:6)
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq_sec, with.legend = "right")
+```
+
+```{r}
+#Exebindo as frequências relativas dos grupos
+seqdplot(actcal.seq_sec, with.legend = "right", border = NA)
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_sec, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq_sec, with.legend = "right")
+```
+
+## 3. Análise de sequência: Atividade principal, amostragem delimitada no espaço e tempo.
+
+Em seguida, faremos mais uma redução da base dados com dois parâmetros:\
+1°. Apenas com o Estado de Goiás.\
+2° Apenas com a amostragem entre 2022 e 2023.
+
+### 3.1 Preparando a base para análise
+
+Primeiramente, será selecionado as variáveis de interesse e filtraremos apenas os dados referentes ao Estado de Goiás dos anos de 2022 e 2023. Depois de filtrar, será retiradas as colunas UF e Ano, de forma a deixar a base mais "limpa".
+
+```{r}
+#Selecionando as variáveis de interesse
+data_goias <- data %>% 
+  select(ID_UNICO, V4012, V1016, UF, Ano) %>%
+  filter(UF=="Goiás", Ano %in% c(2022, 2023))
+
+#Reduzindo a quantidade de informações na base
+data_goias <- data_goias |> 
+  select(ID_UNICO, V4012, V1016)
+
+
+```
+
+Abaixo, será renomeado as observações da variável V4012. E em seguida, a transformação da estrutura de dados de longo para largo.
+
+```{r}
+#Renomeando
+data_goias <- data_goias %>%
+  mutate(V4012 = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPM",
+    V4012 == "Empregado do setor privado" ~ "ESP",
+    V4012 == "Trabalhador doméstico" ~ "TD",
+    V4012 == "Empregador" ~ "E",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TF",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "MMPB"))
+
+data_wide_go <- data_goias %>%
+  pivot_wider(
+    names_from = V1016,           # Nome das novas colunas
+    values_from = V4012)        # Valores das novas colunas
+ 
+```
+
+Agora, removeremos todos os domícilios que tiveram pelo menos um NA durante as 5 entrevistas (2.137 remoções). Também será removido também os domicílios que não exerceram em nenhum momento trabalho como "Conta própria" (43 remoções). E ordenaremos as colunas pelo número da entrevista.
+
+```{r}
+#Removendo todos os domicílios que tiverem ao menos um valor ausente
+data_wide_go <- data_wide_go |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+# Retirando que não atuaram como Conta Própria
+data_final_go <- data_wide_go %>%
+  filter(rowSums(across(2:6, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+#Ordenando a base
+data_final_go <- data_final_go |>
+  relocate(`4`, .before = `5`) |> 
+  relocate(`3`, .before = `4`) |> 
+  relocate(`2`, .before = `3`) |> 
+  relocate(`1`, .before = `2`)
+
+
+head(data_wide_go, 10)
+```
+
+### 3.2 Resultados
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq_go <- seqdef(data_final_go, var = 2:6)
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq_go, with.legend = "right")
+```
+
+```{r}
+#Exebindo as frequências relativas dos grupos
+seqdplot(actcal.seq_go, with.legend = "right", border = NA)
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_go, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq_go, with.legend = "right")
+```
+
+## 4. Análise de sequência: Atividade principal e amostragem completa.
+
+Para utilizar a base de dados completa para plotar os gráficos da análise de sequências, utilizaremos como parâmetro temporal o número da entrevista em que o domícilio foi submetido.
+
+### 4.1 Preparando a base para análise
+
+Faremos isso utilizando a variável V1016 no lugar da Trimestre_Ano. A seguir, renomearemos as observações da variável V4012.
+
+```{r}
+
+#Selecionando apenas as variáveis de interesse
+data_tratado_completo <- data |> 
+  select(ID_UNICO, V4012, V1016)
+
+#Renomeando
+data_tratado_completo <- data_tratado_completo |> 
+  mutate(V4012 = case_when(
+    V4012 == "Conta própria" ~ "CP",
+    V4012 == "Empregado do setor privado" ~ "ESPR",
+    V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4012 == "Empregador" ~ "EMP",
+    V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "MILITAR",
+    V4012 == "Trabalhador doméstico" ~ "TD",
+    V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+    TRUE ~ V4012  # manter os valores que não correspondem a nenhum dos especificados
+  ))
+
+#Visualizando a base
+head(data_tratado_completo, 10)
+```
+
+Abaixo transformaremos a estrutura dos dados de longo para largo, e removeremos os domícilios que deixarem de responder à variável V4012 em algum momomento (217.567 domícilios). Também alteraremos o formato das variáveis temporais para character e a ordenaremos em sequência.
+
+```{r}
+#Desimpilhando a base
+data_tratado_completo <- data_tratado_completo |> 
+  pivot_wider(names_from = V1016, values_from = V4012)
+
+#Removendo todos os domicílios que tiverem ao menos um valor ausente
+data_wide_completo <- data_tratado_completo |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+#Alterando o formato das variáveis temporais
+data_wide_completo <- data_wide_completo |> 
+  mutate(`1` = as.character(`1`)) |> 
+  mutate(`2` = as.character(`2`)) |> 
+  mutate(`3` = as.character(`3`)) |> 
+  mutate(`4` = as.character(`4`)) |> 
+  mutate(`5` = as.character(`5`))
+
+#Ordenando as variáveis temporais
+data_wide_completo <- data_wide_completo |>
+  relocate(`4`, .before = `5`) |> 
+  relocate(`3`, .before = `4`) |> 
+  relocate(`2`, .before = `3`) |> 
+  relocate(`1`, .before = `2`)
+
+head(data_wide_completo, 10)
+```
+
+Agora removeremos todos os domicílios com observações "Null" (185 domicílios). Criaremos uma variável índice, e será removido os domícilios que não exerceram trabalho como "Conta própria" em nenhuma das entrevistas (13.254 domicílios).
+
+```{r}
+
+#Removendo valores "Null"
+data_wide_completo <- data_wide_completo %>%
+  filter_at(vars(2:6), all_vars(. != "NULL"))
+
+#Criando variável índice
+data_wide_completo$ID_INDEX <- as.numeric(factor(data_wide_completo$ID_UNICO))
+
+data_wide_completo <- data_wide_completo %>%
+  relocate(ID_INDEX, .before = ID_UNICO)
+
+# Retirando que não atuaram como Conta Própria
+data_final_completo <- data_wide_completo %>%
+  filter(rowSums(across(3:7, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_completo_temporario <- data_final_completo %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
+```
+
+### 4.2 Resultados
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq_complet <- seqdef(data_final_completo, var = 3:7)
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq_complet, with.legend = "right")
+```
+
+```{r}
+#Exibindo as frequências relativas dos grupos
+seqdplot(actcal.seq_complet, with.legend = "right", border = NA)
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_complet, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq_complet, with.legend = "right")
+```
+
+## 5. Análise de sequência: Atividade secundária e amostragem completa.
+
+### 5.1 Preparando a base para análise
+
+Por se tratar de uma análise de atividade secundária, a única alteração que faremos é de trocar a variável V4012 por V4043.
+
+```{r}
+#Selecionando apenas as variáveis de interesse
+data_tratado_completo_sec <- data |> 
+  select(ID_UNICO, V4043, V1016)
+
+#Renomeando
+data_tratado_completo_sec <- data_tratado_completo_sec |> 
+  mutate(V4043 = case_when(
+    V4043 == "Conta própria" ~ "CP",
+    V4043 == "Empregado do setor privado" ~ "ESPR",
+    V4043 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPU",
+    V4043 == "Empregador" ~ "EMP",
+    V4043 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "MILITAR",
+    V4043 == "Trabalhador doméstico" ~ "TD",
+    V4043 == "Trabalhador não remunerado em ajuda a membro do domicílio ou parente" ~ "TFNR",
+    TRUE ~ V4043  # manter os valores que não correspondem a nenhum dos especificados
+  ))
+
+#Visualizando a base
+head(data_tratado_completo_sec, 10)
+```
+
+As remoções em decorrência de ausência de valores na variável V1016 totalizaram 474.652 domícilios.
+
+```{r}
+#Desimpilhando a base
+data_tratado_completo_sec <- data_tratado_completo_sec |> 
+  pivot_wider(names_from = V1016, values_from = V4043)
+
+#Removendo todos os domicílios que tiverem ao menos um valor ausente
+data_wide_completo_sec <- data_tratado_completo_sec |> 
+  filter(!rowSums(is.na(across(2:6))))
+
+#Alterando o formato das variáveis temporais
+data_wide_completo_sec <- data_wide_completo_sec |> 
+  mutate(`1` = as.character(`1`)) |> 
+  mutate(`2` = as.character(`2`)) |> 
+  mutate(`3` = as.character(`3`)) |> 
+  mutate(`4` = as.character(`4`)) |> 
+  mutate(`5` = as.character(`5`))
+
+#Ordenando as variáveis temporais
+data_wide_completo_sec <- data_wide_completo_sec |>
+  relocate(`4`, .before = `5`) |> 
+  relocate(`3`, .before = `4`) |> 
+  relocate(`2`, .before = `3`) |> 
+  relocate(`1`, .before = `2`)
+
+head(data_wide_completo_sec, 10)
+```
+
+As remoções em decorrência de domícilios que não exerceram "Conta própria" totalizaram 468.
+
+```{r}
+
+#Criando variável índice
+data_wide_completo_sec$ID_INDEX <- as.numeric(factor(data_wide_completo_sec$ID_UNICO))
+
+data_wide_completo_sec <- data_wide_completo_sec %>%
+  relocate(ID_INDEX, .before = ID_UNICO)
+
+# Retirando que não atuaram como Conta Própria
+data_final_completo_sec <- data_wide_completo_sec %>%
+  filter(rowSums(across(3:7, ~.x != "CP", .names = "col_{.col}")) < 5)
+
+# Selecionando apenas os domícilios que atuaram como Conta Própria de forma não persistente (SE NÃO FOR O OBJETIVO DA ANÁLISE, IGNORE E SIGA COM data_final)
+data_final_completo_sec_temporario <- data_final_completo_sec %>%
+  filter(rowSums(across(3:7, ~ . == "CP")) < 5)
+```
+
+### 5.2 Resultados
+
+```{r}
+#Definindo as variáveis temporais, ou os "Estados"
+actcal.seq_complet_sec <- seqdef(data_final_completo_sec, var = 3:7)
+
+
+#Exibindo apenas 10 sequências
+seqiplot(actcal.seq_complet_sec, with.legend = "right")
+```
+
+```{r}
+#Exibindo as frequências relativas dos grupos
+seqdplot(actcal.seq_complet_sec, with.legend = "right", border = NA)
+```
+
+```{r}
+#Exibindo todas as sequências do dataframe
+seqIplot(actcal.seq_complet_sec, sortv = "from.start", with.legend = "right")
+```
+
+```{r}
+#Exibindo as 10 sequências mais frequentes
+seqfplot(actcal.seq_complet_sec, with.legend = "right")
+```
