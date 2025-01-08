@@ -87,21 +87,20 @@ data_id_unico <- data_id |>
 
 Algumas categorias da variável ocupação (V4012) serão unidos. Todos os níveis serão renomeados com iniciais de suas respectivas descrição. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002) foram agregadas à variável V4012 com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho. A tabela abaixo sintetiza estes tratamentos.
 
-+--------------------------------------+----------------------------+---------------+
-| Antes do tratamento                  | Após o tratamento          | Abreviação    |
-+======================================+:==========================:+:=============:+
-| -   Empregado do setor privado.      | Empregado do setor privado | ESPR          |
-|                                      |                            |               |
-| -   Trabalhador doméstico.           |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT           |
-|                                      |                            |               |
-| -   Pessoa desocupada                |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Conta própria.                   | Conta própria              | CP            |
-+--------------------------------------+----------------------------+---------------+
-| -   Empregador                       | Empregador                 | EMP           |
-+--------------------------------------+----------------------------+---------------+
++--------------------------------------+----------------------------+--------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação   |
++======================================+:==========================:+:============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
+|                                      |                            |              |
+| -   Trabalhador doméstico.           |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
+|                                      |                            |              |
+| -   Pessoa desocupada                |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Conta própria.                   | Empreendedor               | EMP          |
+| -   Empregador                       |                            |              |
++--------------------------------------+----------------------------+--------------+
 
 Tratamento para renomear categorias e incluir a categoria de fora da força de trabalho.
 
@@ -885,21 +884,21 @@ data_id_unico_18_19 <- data_id_18_19 |>
 
 Algumas categorias da variável ocupação (V4012) serão unidos. Todos os níveis serão renomeados com iniciais de suas respectivas descrição. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002) foram agregadas à variável V4012 com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho. A tabela abaixo sintetiza estes tratamentos.
 
-+--------------------------------------+----------------------------+---------------+
-| Antes do tratamento                  | Após o tratamento          | Abreviação    |
-+======================================+:==========================:+:=============:+
-| -   Empregado do setor privado.      | Empregado do setor privado | ESPR          |
-|                                      |                            |               |
-| -   Trabalhador doméstico.           |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT           |
-|                                      |                            |               |
-| -   Pessoa desocupada                |                            |               |
-+--------------------------------------+----------------------------+---------------+
-| -   Conta própria.                   | Conta própria              | CP            |
-+--------------------------------------+----------------------------+---------------+
-| -   Empregador                       | Empregador                 | EMP           |
-+--------------------------------------+----------------------------+---------------+
++--------------------------------------+----------------------------+--------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação   |
++======================================+:==========================:+:============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
+|                                      |                            |              |
+| -   Trabalhador doméstico.           |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
+|                                      |                            |              |
+| -   Pessoa desocupada                |                            |              |
++--------------------------------------+----------------------------+--------------+
+| -   Conta própria.                   | Conta própria              | CP           |
++--------------------------------------+----------------------------+--------------+
+| -   Empregador                       | Empregador                 | EMP          |
++--------------------------------------+----------------------------+--------------+
 
 Tratamento para renomear categorias e incluir a categoria de fora da força de trabalho.
 
