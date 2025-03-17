@@ -4,19 +4,19 @@ format: html
 editor: visual
 ---
 
-# 1. Análise de sequência
+# 1. Análise de transição (PFT -\> TCP)
 
-A análise de sequência contém três etapas principais:
+A análise de transição de carreira de pessoas fora do trabalho (desocupados e fora da força de trabalho) para trabalhador por conta própria será feita em duas etapas:
 
 1.  Codificação das narrativas ou processos em sequências;
 
-2.  Mensuração das dissimilaridades dos indivíduos par a par ;
+2.  Agregação de variáveis.
 
-3.  Aplicação de técnica de redução de dimensionalidade (ex.: análise de cluster) para agrupar sequências similares.
+A codificação das narrativas ou processos em sequências se refere à primeira etapa de uma análise de sequência. E a segunda servirá como features instrumentalizando modelos de predição de machine learning, método pelo qual a transição será analisada.
 
 Antes de adentrar nestas etapas, vamos trabalhar com o tratamento dos dados conforme script a seguir.
 
-## 1.1. Tratamento dos dados (2022-2023)
+## 1.1. Tratamento dos dados .
 
 A base de dados utilizada neste script, é a de trabalhadores que participaram no máximo de cinco entrevistas em cinco trimestres seguidos.
 
@@ -40,7 +40,7 @@ library(factoextra)
 
 ```
 
-A base de dados utilizada neste trabalho possui **id** para grupos de indivíduos. No próximo bloco será criado um filtro para o ano de 2022 e 2023, para pessoas que possuem idade a partir de 14 anos.
+A base de dados utilizada neste trabalho possui **id** para grupos de indivíduos. No próximo bloco será criado um filtro para o últrimo trimestre do ano de 2017 e os de 2018, para pessoas que possuem idade a partir de 14 anos.
 
 Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este ID_UNICO foi construído a partir da concatenação de algumas variáveis: UPA, V1008 (número de seleção do domicílio), V1014 (grupo de amostras), V2008 (dia de nascimento), V20081(mês de nascimento), V20082 (Ano de nascimento), V2007 (sexo), estrato.
 
@@ -50,13 +50,13 @@ Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este 
 
 # Carregando a base
 
-data_1 <- vroom::vroom("C:/Users/alefs/Downloads/tcp_5trimestres.csv",
+data_1 <- vroom::vroom("C:/Users/alefs/Downloads/tcp_pft_5trimestres.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 
 # Filtrando os anos de 2022 e 2023 e filtrando pessoas maiores que 14 anos
 
-data_2018_2019 <- data_1 |>   
+data_2017_2018 <- data_1 |>   
                     select(id, Ano, Trimestre, UF, 
                            UPA, Estrato, 
                            V1008,V4012,V1014,V1022,
@@ -70,7 +70,7 @@ data_2018_2019 <- data_1 |>
 
 # Criando a variável ID_UNICO
 
-data_id <- data_2018_2019 |> 
+data_id <- data_2017_2018 |> 
             mutate(ID_UNICO = 
                      paste(UPA, V1008, V1014, 
                            V2008, V20081, V20082,
@@ -88,20 +88,20 @@ data_id_unico <- data_id |>
 
 Algumas categorias da variável ocupação (V4012) serão unidos. Todos os níveis serão renomeados com iniciais de suas respectivas descrição. As pessoas fora da força de trabalho (VD4001) e na condição de desocupados (VD4002) foram agregadas à variável V4012 com a finalidade de completar os estados nas sequências na posição de desocupação ou fora da força de trabalho. A tabela abaixo sintetiza estes tratamentos.
 
-+--------------------------------------+----------------------------+--------------+
-| Antes do tratamento                  | Após o tratamento          | Abreviação   |
-+======================================+:==========================:+:============:+
-| -   Empregado do setor privado.      | Empregado do setor privado | ESPR         |
-|                                      |                            |              |
-| -   Trabalhador doméstico.           |                            |              |
-+--------------------------------------+----------------------------+--------------+
-| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT          |
-|                                      |                            |              |
-| -   Pessoa desocupada                |                            |              |
-+--------------------------------------+----------------------------+--------------+
-| -   Conta própria.                   | Empreendedor               | EMP          |
-| -   Empregador                       |                            |              |
-+--------------------------------------+----------------------------+--------------+
++--------------------------------------+----------------------------+---------------+
+| Antes do tratamento                  | Após o tratamento          | Abreviação    |
++======================================+:==========================:+:=============:+
+| -   Empregado do setor privado.      | Empregado do setor privado | ESPR          |
+|                                      |                            |               |
+| -   Trabalhador doméstico.           |                            |               |
++--------------------------------------+----------------------------+---------------+
+| -   Pessoa fora da força de tratalho | Fora do trabalho           | PFT           |
+|                                      |                            |               |
+| -   Pessoa desocupada                |                            |               |
++--------------------------------------+----------------------------+---------------+
+| -   Militar.                         | Empregado do setor público | ESPub         |
+| -   Empregado do setor público       |                            |               |
++--------------------------------------+----------------------------+---------------+
 
 Tratamento para renomear categorias e incluir a categoria de fora da força de trabalho.
 
@@ -133,14 +133,14 @@ data_0 <-
                 VD4002 == "Pessoas ocupadas" ~ 
                                   as.character(V4012_ajust),
                 VD4001 == "Pessoas na força de trabalho" & 
-                VD4002 == "Pessoas desocupadas" ~ "PFT",
+                VD4002 == "Pessoas desocupadas" ~ "Desocupado",
                 VD4001 == "Pessoas fora da força de trabalho" ~ 
                                   "PFT"), 
       .after = V4012_ajust)
 
 ```
 
-De acordo com os resultados, observa-se que foram retirados aqueles indivíduos que foram empregados ou servidores públicos (ESPub) assim como o Trabalhador Familiar Não Remunerado (TFNR) em algum momento. Fizemos isso apenas para tentar diminuir a complexidade das análises.
+Como o objetivo da análise de transição de carreira é de fora da força de trabalho para trabalho por conta própria, iremos excluir as demais categorias ocupacionais do tratamento.
 
 ```{r}
 #| eval: false
@@ -151,7 +151,8 @@ excluindo_ocupacoes <-
                        ocupacao == "ESPub" |
                         ocupacao == "EMP" |
                          ocupacao == "ESPriv" |
-                         ocupacao == "ESPub")
+                         ocupacao == "ESPub" |
+                         ocupacao == "PFT")
 
 excluindo_ocupacoes <- excluindo_ocupacoes$ID_UNICO
 
@@ -166,7 +167,7 @@ A partir da próxima subseção começamos a lidar com a análise de sequência 
 
 ## 1.2. Codificação das narrativas ou processos em sequências
 
-Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências.
+Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências. Além disso, filtraremos os que completaram as 5 entrevistas no período analisado e selecionaremos apenas os indivíduos que migraram para desocupação no último trimestre.
 
 ```{r}
 #| warning: false
@@ -191,11 +192,10 @@ data_ordem <- data_wide|>
 
 data_filtro <- data_ordem  |> 
   filter(if_all(2:6, ~ . != "NULL")) |>  
-  filter(if_all(2:5, ~ . == "TCP")) |> 
+  filter(if_all(2:4, ~ . == "Desocupado")) |> 
   mutate(id_seq = row_number()) |> 
-  mutate(transicao = case_when(`5` == "TCP" ~ 0,
-                               `5` == "PFT" ~ 1)) |> 
-  filter(!is.na(transicao))
+  mutate(transicao = case_when(`4` == "Desocupado" ~ 0,
+                               `4` == "TCP" ~ 1))
 
 ```
 
