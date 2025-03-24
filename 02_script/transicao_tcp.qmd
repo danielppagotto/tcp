@@ -4,9 +4,9 @@ format: html
 editor: visual
 ---
 
-# 1. Análise de transição (PFT -\> TCP)
+# 1. Análise de transição de TCP.
 
-A análise de transição de carreira de pessoas fora do trabalho (desocupados e fora da força de trabalho) para trabalhador por conta própria será feita em duas etapas:
+A análise de transição de carreira de pessoas em situação de desocupação para trabalho por conta própria (e vice-versa) será feita em duas etapas:
 
 1.  Codificação das narrativas ou processos em sequências;
 
@@ -15,10 +15,6 @@ A análise de transição de carreira de pessoas fora do trabalho (desocupados e
 A codificação das narrativas ou processos em sequências se refere à primeira etapa de uma análise de sequência. E a segunda servirá como features instrumentalizando modelos de predição de machine learning, método pelo qual a transição será analisada.
 
 Antes de adentrar nestas etapas, vamos trabalhar com o tratamento dos dados conforme script a seguir.
-
-## 1.1. Tratamento dos dados
-
-A base de dados utilizada neste script, é a de trabalhadores que participaram no máximo de cinco entrevistas em cinco trimestres seguidos.
 
 Carregando pacotes necessários.
 
@@ -40,7 +36,11 @@ library(factoextra)
 
 ```
 
-A base de dados utilizada neste trabalho possui **id** para grupos de indivíduos. No próximo bloco será criado um filtro para o últrimo trimestre do ano de 2017 e os de 2018, para pessoas que possuem idade a partir de 14 anos.
+## 1.2 (Desocupado -\> TCP)
+
+### 1.2.1 Tratamento dos dados
+
+No próximo bloco será criado um filtro para o últrimo trimestre do ano de 2017 e os de 2018, para pessoas que possuem idade a partir de 14 anos.
 
 Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este ID_UNICO foi construído a partir da concatenação de algumas variáveis: UPA, V1008 (número de seleção do domicílio), V1014 (grupo de amostras), V2008 (dia de nascimento), V20081(mês de nascimento), V20082 (Ano de nascimento), V2007 (sexo), estrato.
 
@@ -48,12 +48,10 @@ Foi criada uma variável para identificar os indivíduos chamada ID_UNICO. Este 
 #| warning: false
 #| eval: false
 
-setwd("C:/Users/Lapei_Cigets/Desktop/PNADC")
-
 # Carregando a base
 
 data_1 <- vroom::vroom(
-  "C:/Users/Lapei_Cigets/Desktop/PNADC/tcp_pft_5trimestres.csv",
+  "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/tcp_pft_5trimestres.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 
@@ -171,53 +169,344 @@ No próximo bloco, serão selecionadas as variáveis de interesse (ID_UNICO, V10
 
 A partir da próxima subseção começamos a lidar com a análise de sequência propriamente dita.
 
-## 1.2. Codificação das narrativas ou processos em sequências
+### 1.2.2 Codificação das narrativas ou processos em sequências
 
-Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências. Além disso, filtraremos os que completaram as 5 entrevistas no período analisado e selecionaremos apenas os indivíduos que migraram para desocupação no último trimestre.
+Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências.
 
 ```{r}
 #| warning: false
 #| eval: false
 
-data_long <- 
+data_long_1.2.2 <- 
   dados_tratados |>
   select(ID_UNICO, V1016,ocupacao)
 
 #Transformando a estrutura de dados para wide
-data_wide <- data_long |> 
+data_wide_1.2.2 <- data_long_1.2.2 |> 
   pivot_wider(names_from = V1016, 
               values_from = ocupacao,
               values_fn = list)
 
 # Colocando as colunas em ordem de entrevista e para caracteres
-data_ordem <- data_wide|> 
+data_ordem_1.2.2 <- data_wide_1.2.2|> 
   relocate(ID_UNICO,`1`, `2`, `3`, `4`, `5`) |>
   mutate(across(`1`:`5`, as.character)) 
 
+```
+
+### 1.2.3 Transição último trimestre.
+
+A seguir filtraremos os que completaram as 5 entrevistas no período analisado e selecionaremos apenas os indivíduos que migraram para desocupação no último trimestre.
+
+```{r}
 # id_seq foi criada apenas para ter mais uma coluna de identificação 
 
-data_filtro <- data_ordem  |> 
+data_filtro_1.2.3 <- data_ordem_1.2.2  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(if_all(2:5, ~ . == "Desocupado")) |> 
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`5` == "Desocupado" ~ 0,
+                               `5` == "TCP" ~ 1))
+```
+
+Isso resultou em uma amostra de 394 indivíduos que foram acompanhados ao longo de 5 trimestres.
+
+```{r}
+data_filtro_1.2.3 |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
+```
+
+Observa-se que dos 394 indivíduos identificados que estavam desocupados no trimestre 3/2018, apenas 9% migrou para trabalho por conta própria no período subsequente.
+
+### 1.2.4 Transição penúltimo trimestre.
+
+Abaixo analisaremos a transição no penúltimo trimestre de 2018 da seguinte forma:
+
+-   Se o profissional transicionou para TCP no trimestre 3 e no último trimestre retornou para desocupado, atribuiremos valor 0.
+
+-   Se o profissional transicionou para TCP no trimestre 3 e assim permenaceu no último trimestre, atribuiremos valor 1.
+
+```{r}
+# id_seq foi criada apenas para ter mais uma coluna de identificação 
+
+data_filtro_1.2.4 <- data_ordem_1.2.2  |> 
   filter(if_all(2:6, ~ . != "NULL")) |>  
   filter(if_all(2:4, ~ . == "Desocupado")) |> 
   mutate(id_seq = row_number()) |> 
-  mutate(transicao = case_when(`4` == "Desocupado" | 
+  mutate(transicao = case_when(`4` == "Desocupado" |
                                `5` == "Desocupado" ~ 0,
                                `4` == "TCP" &
                                `5` == "TCP" ~ 1))
 
+data_filtro_1.2.4 |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
 ```
 
-Foram mantidos apenas aqueles indivíduos que possuem registros nos cinco trimestres, conforme o último bloco de códigos acima. Isso resultou em uma amostra de 46645 indivíduos que foram acompanhados ao longo de 5 trimestres entre 2022 e 2023.
+Observa-se que dos 433 indivíduos que transicionaram para TCP no penúltimo trimestre, 6% persistiram pelos dois períodos subsequentes.
 
-## 1.3 Agregando variáveis
+### 1.2.5 Agregando variáveis
 
 ```{r}
-features <- 
+features_1.2.5 <- 
   dados_tratados |> 
-  filter(ID_UNICO %in% data_filtro$ID_UNICO,
+  filter(ID_UNICO %in% data_filtro_1.2.3$ID_UNICO,
          V1016 == 4) |> 
   select(ID_UNICO, V2009, V2007, VD3004, V2010, UF)
 
-data_final <- data_filtro |> 
-  left_join(features, by = c("ID_UNICO" = "ID_UNICO"))
+data_final_1.2.5 <- data_filtro_1.2.3 |> 
+  left_join(features_1.2.5, by = c("ID_UNICO" = "ID_UNICO"))
+```
+
+## 1.3. (TCP -\> PFT)
+
+A análise de transição de carreira de pessoas que trabalham por conta própria para situação de desocupação será feita repetindo a metodologia anterior.
+
+### 1.3.1 Tratamento dos dados
+
+No entanto, consideraremos PFT (desocupados + fora da força de trabalho), para isso realizaremos um ajuste para seguir com a análise.
+
+```{r}
+data_1.3.1 <- 
+  data |> 
+    mutate(
+      ocupacao = 
+        case_when(
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas ocupadas" ~ 
+                                  as.character(V4012_ajust),
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas desocupadas" ~ "PFT",
+                VD4001 == "Pessoas fora da força de trabalho" ~ 
+                                  "PFT"), .after = V4012_ajust)
+
+excluindo_ocupacoes_1.3.1 <- 
+            data_1.3.1 |> 
+                filter(ocupacao == "TFNR" | 
+                       ocupacao == "ESPub"|
+                       ocupacao == "EMP"  |
+                       ocupacao == "ESPriv"|
+                       ocupacao == "ESPub")
+
+excluindo_ocupacoes_1.3.1 <- excluindo_ocupacoes_1.3.1$ID_UNICO
+
+dados_tratados_1.3.1 <- data_1.3.1 |> 
+                    filter(!ID_UNICO %in% 
+                           excluindo_ocupacoes_1.3.1)
+```
+
+### 1.3.2 Codificação das narrativas ou processos em sequências
+
+Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências.
+
+```{r}
+data_long_1.3.2 <- 
+  dados_tratados_1.3.1 |>
+  select(ID_UNICO, V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide_1.3.2 <- data_long_1.3.2 |> 
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
+              values_fn = list)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem_1.3.2 <- data_wide_1.3.2|> 
+  relocate(ID_UNICO,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) 
+```
+
+### 1.3.3 Transição último trimestre.
+
+Abaixo, o tratamento para a análise da transição no último trimestre.
+
+```{r}
+# id_seq foi criada apenas para ter mais uma coluna de identificação 
+
+data_filtro_1.3.3 <- data_ordem_1.3.2  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(if_all(2:5, ~ . == "TCP")) |> 
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`5` == "TCP" ~ 0,
+                               `5` == "PFT" ~ 1))
+
+data_filtro_1.3.3 |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
+```
+
+Observa-se que dos 4.374 indivíduos identificados, 6% transicionaram de trabalho por conta própria para PFT (desocupado + fora da força de trabalho) no último trimestre.
+
+### 1.3.4 Transição penúltimo trimestre.
+
+Abaixo analisaremos a transição no penúltimo trimestre de 2018 da seguinte forma:
+
+-   Se o profissional transicionou para PFT no trimestre 3 e no último trimestre retornou para PFT, atribuiremos valor 0.
+
+-   Se o profissional transicionou para PFT no trimestre 3 e assim permenaceu no último trimestre, atribuiremos valor 1.
+
+```{r}
+# id_seq foi criada apenas para ter mais uma coluna de identificação 
+
+data_filtro_1.3.4 <- data_ordem_1.3.2  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(if_all(2:4, ~ . == "TCP")) |> 
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`4` == "TCP" |
+                               `5` == "TCP" ~ 0,
+                               `4` == "PFT" &
+                               `5` == "PFT" ~ 1))
+
+data_filtro_1.3.4 |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
+```
+
+Observa-se que dos 4.691 indivíduos que transicionaram para TCP no penúltimo trimestre, 3% persistiram pelos dois períodos subsequentes.
+
+### 1.3.5 Agregando variáveis
+
+```{r}
+features_1.3.5 <- 
+  dados_tratados_1.3.1 |> 
+  filter(ID_UNICO %in% data_filtro_1.3.3$ID_UNICO,
+         V1016 == 4) |> 
+  select(ID_UNICO, V2009, V2007, VD3004, V2010, UF)
+
+data_final_1.3.5 <- data_filtro_1.3.3 |> 
+  left_join(features_1.3.5, by = c("ID_UNICO" = "ID_UNICO"))
+```
+
+# PARA ANÁLISE ABAIXO, PRECISA MONTAR A BASE DE DADOS!!!
+
+## 1.4. (ESPriv -\> TCP)
+
+### 1.4.1 Tratamento dos dados
+
+```{r}
+#| warning: false
+#| eval: false
+
+# Carregando a base
+
+data_1_1.4 <- vroom::vroom(
+  "C:/Users/alefs/Downloads/tcp_pft_5trimestres.csv",
+                       progress = FALSE,
+                       show_col_types = FALSE)
+
+# Filtrando os anos de 2022 e 2023 e filtrando pessoas maiores que 14 anos
+
+data_2017_2018_1.4 <- data_1_1.4 |>   
+                    select(id, Ano, Trimestre, UF, 
+                           UPA, Estrato, 
+                           V1008,V4012,V1014,V1022,
+                           V1016, V2007, V2008, V20081, 
+                           V20082, V2007, V2009,
+                           VD4001,VD4002, VD3004, V4039,
+                           VD4010, V4032, V4019, V2010) |>  
+                    filter(V2009 >= 14, 
+                           Ano == 2018 | 
+                          (Ano == 2017 & Trimestre == 4))
+
+# Criando a variável ID_UNICO
+
+data_id_1.4 <- data_2017_2018_1.4 |> 
+            mutate(ID_UNICO = 
+                     paste(UPA, V1008, V1014, 
+                           V2008, V20081, V20082,
+                           V2007, Estrato, sep = "_")) |> 
+            relocate(ID_UNICO, .before = Ano)
+
+# Criando a variável Trimestre_Ano
+
+data_id_unico_1.4 <- data_id_1.4 |> 
+                    mutate(Trimestre_Ano = 
+                             paste(Trimestre,
+                                   Ano, 
+                                   sep = "-"), 
+                           .before = UF)
+```
+
+```{r}
+data_1.4 <- 
+  data_id_unico_1.4|> 
+  mutate(V4012_ajust = 
+           case_when(
+                V4012 == "Conta própria"  ~ "TCP",
+                V4012 == "Empregado do setor privado" ~ "ESPriv",
+                V4012 == "Trabalhador doméstico" ~ "ESPriv",
+                V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
+                V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ 
+                  "ESPub",  
+                V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+                V4012 == "Empregador" ~ "EMP"), 
+         .after = Ano)
+
+
+#Agregando a condição de força da força de trabalho e desocupado
+
+data_0_1.4 <- 
+  data_1.4 |> 
+    mutate(
+      ocupacao = 
+        case_when(
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas ocupadas" ~ 
+                                  as.character(V4012_ajust),
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+                VD4001 == "Pessoas fora da força de trabalho" ~ 
+                                  "PFT"), .after = V4012_ajust)
+```
+
+```{r}
+#| eval: false
+
+excluindo_ocupacoes_1.4 <- 
+            data_0 |> 
+                filter(ocupacao == "TFNR" | 
+                       ocupacao == "ESPub"|
+                       ocupacao == "EMP"  |
+                       ocupacao == "Desocupado"|
+                       ocupacao == "ESPub" |
+                       ocupacao == "PFT")
+
+excluindo_ocupacoes_1.4 <- excluindo_ocupacoes_1.4$ID_UNICO
+
+dados_tratados_1.4 <- data_0 |> 
+                    filter(!ID_UNICO %in% 
+                           excluindo_ocupacoes_1.4)
+```
+
+### 1.4.2 Codificação das narrativas ou processos em sequências
+
+```{r}
+data_long_1.4.2 <- 
+  dados_tratados_1.4 |>
+  select(ID_UNICO, V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide_1.4.2 <- data_long_1.4.2 |> 
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
+              values_fn = list)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem_1.4.2 <- data_wide_1.4.2|> 
+  relocate(ID_UNICO,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) 
+```
+
+### 1.4.3 Transição último trimestre.
+
+```{r}
+# id_seq foi criada apenas para ter mais uma coluna de identificação 
+
+data_filtro_1.4.3 <- data_wide_1.4.2  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(if_all(2:5, ~ . == "ESPriv")) |> 
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`5` == "ESPriv" ~ 0,
+                               `5` == "TCP" ~ 1))
 ```
