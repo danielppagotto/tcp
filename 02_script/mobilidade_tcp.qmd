@@ -1,0 +1,152 @@
+---
+title: "mobilidade_tcp"
+format: html
+editor: visual
+---
+
+# Análise de mobilidade de carreira de TCP.
+
+Nesse script analisaremos com base nos dados da PNAD contínua a mobilidade de carreira de pessoas em situação de desocupação para trabalho por conta próprio e emprego no setor privado. Os dados utilizados são provenientes da amostragem nos trimestres 04/2023 à 04/2024. Seguiremos a seguinte estrutura:
+
+1.  Tratamento dos dados;
+2.  Codificação das narrativas ou processos em sequências;
+3.  Agregação de variáveis e análise descritiva.
+
+Abaixo, as bibliotecas que serão utilizadas.
+
+```{r}
+#| warning: false
+
+options(scipen = 999)
+
+library(TraMineR)
+library(tidyverse)
+library(TraMineRextras)
+library(FactoMineR)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(stringr)
+library(ggseqplot)
+library(factoextra)
+```
+
+## 1. Tratamentos dos dados.
+
+A seguir iremos carregar a base de dados.
+
+```{r}
+data_raiz <- vroom::vroom(
+  "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/tcp_espriv_5trimestres.csv",
+                       progress = FALSE,
+                       show_col_types = FALSE)
+```
+
+A seguir, criaremos a variável Trimestre_ano, selecionaremos apenas maiores de 14, e desenvolveremos a variável ocupação para fins da análise.
+
+Observação: O trabalhador doméstico foi incluído como empregado do setor privado.
+
+```{r}
+data <- data_raiz |> 
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, 
+                                   sep = "-"),  .before = UF) |> 
+  filter(V2009 >= 14)
+
+data_1 <- data |> 
+mutate(V4012_ajust = 
+           case_when(
+                V4012 == "Conta própria"  ~ "TCP",
+                V4012 == "Empregado do setor privado" ~ "ESPriv",
+                V4012 == "Trabalhador doméstico" ~ "ESPriv",
+                V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
+                V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ 
+                  "ESPub",  
+                V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+                V4012 == "Empregador" ~ "EMP"), 
+         .after = Ano)
+  
+data_2 <- data_1 |> 
+  mutate(
+      ocupacao = 
+        case_when(
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas ocupadas" ~ 
+                                  as.character(V4012_ajust),
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+                VD4001 == "Pessoas fora da força de trabalho" ~ 
+                                  "PFT"), .after = V4012_ajust)
+```
+
+Como o objeto da análise reside sobre os desocupados, trabalhadores por conta própria e empregado do setor privado, iremos excluir as demais ocupações.
+
+```{r}
+excluindo_ocupacoes <- 
+            data_2 |> 
+                filter(ocupacao == "TFNR" | 
+                       ocupacao == "ESPub"|
+                       ocupacao == "EMP"  |
+                       ocupacao == "ESPub" |
+                       ocupacao == "PFT")
+
+excluindo_ocupacoes <- excluindo_ocupacoes$id
+
+dados_tratados <- data_2 |> 
+                    filter(!id %in% 
+                           excluindo_ocupacoes)
+```
+
+## 2. Codificação das narrativas ou processos em sequências.
+
+Nesta etapa, os processos são codificados em sequências.
+
+```{r}
+data_long <- 
+  dados_tratados |>
+  select(id, V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide <- data_long |> 
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
+              values_fn = list)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem <- data_wide |> 
+  relocate(id,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) 
+```
+
+## 3. Mobilidade de carreira.
+
+A seguir iremos testar alguns períodos de mobilidade.
+
+### 3.1. Mobilidade no penúltimo trimestre.
+
+```{r}
+data_mob_1 <- data_ordem  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`1` == "Desocupado" &
+                               `2` == "Desocupado" &
+                                `3` == "TCP" &
+                                 `4` == "TCP" ~ 1,
+                               `2` == "Desocupado" &
+                               `3` == "Desocupado" &
+                                `4` == "TCP" &
+                                 `5` == "TCP" ~ 1,
+                               `1` == "Desocupado" &
+                               `2` == "Desocupado" &
+                                `3` == "ESPriv" &
+                                 `4` == "ESPriv" ~ 0,
+                               `2` == "Desocupado" &
+                               `3` == "Desocupado" &
+                                `4` == "ESPriv" &
+                                 `5` == "ESPriv" ~ 0)) |> 
+  filter(!is.na(transicao))
+                               
+
+data_mob_1 |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
+```

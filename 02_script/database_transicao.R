@@ -22,18 +22,20 @@ base_pnad <- function(ano, trimestre){
            V40431, V4044, V4046, V4049, V4050, V4056, 
            V4056C, V4057, V4058, V4062, V4062C, VD3004, 
            VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
-           VD3004, VD3005, VD4010, VD4011, VD4019)
+           VD3004, VD3005, VD4010, VD4011, VD4019, VD4015,
+           VD4016, VD4017, VD4019, VD4020, VD2002, V2005,
+)
 }
 
 
 # Baixando dados PNAD -----------------------------------------------------
 
 #Baixando dado do último trimestre de 2017
-pnad_04_2017 <- base_pnad(2017, 4)
+pnad_04_2023 <- base_pnad(2023, 4)
 
 
 #Criando loop para rodar função
-ano <- 2018
+ano <- 2024
 trimestre <- 1:4
 resultado <- list()
 for (ano in ano) {
@@ -42,10 +44,10 @@ for (ano in ano) {
       base_pnad(ano = ano, trimestre = trimestre)
   }
 }
-resultado_2018 <- do.call(rbind, resultado)
+resultado_2024 <- do.call(rbind, resultado)
 
 #Juntando a base de 2017 e 2018
-resultado_final <- rbind(data_04_2017, resultado_2018)
+resultado_final <- rbind(pnad_04_2023, resultado_2024)
 
 #Salvando para fins de backup
 #write.csv(resultado_final,"C:/Users/alefs/Downloads/backup_pnad_042017_2018.csv")
@@ -63,25 +65,25 @@ pnadc <-
 
 
 #Filtrando apenas os que foram TCP ou desocupada ou fora da força de trabalho
-pnadc_tcp_pft <- 
+pnadc_tcp_pft_espriv <- 
   pnadc |> 
-  filter(V4012 == "Conta própria" | 
+  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" |
            (VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas") | 
            VD4001 == "Pessoas fora da força de trabalho")
 
 
 #Identificando os que cumpriram com a condição anterior
-vetor_tcp_pft <- unique(pnadc_tcp_pft$id)
+vetor_tcp_espriv <- unique(pnadc_tcp_pft_espriv$id)
 
 
 #Filtrando a base apenas com os que cumpriram a condição
-pnadc_tcp_pft_todos <- 
+pnadc_tcp_espriv_todos <- 
   pnadc |> 
-  filter(id %in% vetor_tcp_pft)
+  filter(id %in% vetor_tcp_espriv)
 
 
 # Pegando apenas pessoas que tiveram exatamente 5 entrevistas 
-id_pnadc_trimestres <- pnadc_tcp_pft_todos |> 
+id_pnadc_trimestres <- pnadc_tcp_espriv_todos |> 
                         group_by(id) |> 
                         count() |> 
                         filter(n == 5)
@@ -90,9 +92,9 @@ id_pnadc_trimestres <- pnadc_tcp_pft_todos |>
 vetor_tcp_5trimestres <- unique(id_pnadc_trimestres$id)
 
 #Filtrando os ID
-tcp_pft_5trim <- 
-  pnadc_tcp_pft_todos |> 
+tcp_espriv_5trim <- 
+  pnadc_tcp_espriv_todos |> 
   filter(id %in% vetor_tcp_5trimestres)
 
 #Salvando
-#write.csv(tcp_pft_5trim,"tcp_pft_5trimestres.csv")
+write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres.csv")
