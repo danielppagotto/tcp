@@ -29,6 +29,7 @@ library(purrr)
 library(stringr)
 library(ggseqplot)
 library(factoextra)
+library(janitor)
 ```
 
 ## 1. Tratamentos dos dados.
@@ -119,9 +120,7 @@ data_ordem <- data_wide |>
 
 ## 3. Mobilidade de carreira.
 
-A seguir iremos testar alguns períodos de mobilidade.
-
-### 3.1. Mobilidade no penúltimo trimestre.
+A mobilidade de carreira analisada será com relação aos indivíduos que após permanecerem por pelo menos dois períodos subsequentes em situação em desocupação migraram para trabalho por conta própria ou emprego no setor privado permanecendo por pelo menos mais dois trimestres.
 
 ```{r}
 data_mob_1 <- data_ordem  |> 
@@ -130,23 +129,168 @@ data_mob_1 <- data_ordem  |>
   mutate(transicao = case_when(`1` == "Desocupado" &
                                `2` == "Desocupado" &
                                 `3` == "TCP" &
-                                 `4` == "TCP" ~ 1,
+                                 `4` == "TCP" ~ "Migrou para TCP",
                                `2` == "Desocupado" &
                                `3` == "Desocupado" &
                                 `4` == "TCP" &
-                                 `5` == "TCP" ~ 1,
+                                 `5` == "TCP" ~ "Migrou para TCP",
                                `1` == "Desocupado" &
                                `2` == "Desocupado" &
                                 `3` == "ESPriv" &
-                                 `4` == "ESPriv" ~ 0,
+                                 `4` == "ESPriv" ~ "Migrou para o setor privado",
                                `2` == "Desocupado" &
                                `3` == "Desocupado" &
                                 `4` == "ESPriv" &
-                                 `5` == "ESPriv" ~ 0)) |> 
+                                 `5` == "ESPriv" ~ "Migrou para o setor privado")) |> 
   filter(!is.na(transicao))
                                
 
 data_mob_1 |> 
   count(transicao) |> 
   mutate(percentual = round(n / sum(n),2))
+```
+
+## 4.Análise descritiva.
+
+Primeiros, iremos agregar as variáveis que serão analisadas através do id.
+
+```{r}
+features <- 
+  dados_tratados |> 
+  filter(id %in% data_mob_1$id,
+         V1016 == 4) |> 
+  select(id, V2009, V2007, VD3004, V2010, V2005, UF)
+
+```
+
+A seguir iremos fazer os seguintes tratamentos.
+
+-   Renomeação das variáveis;
+
+-   Classificação da variável de escolaridade em Ensino Médio Completo e Ensino Médio Incompleto.
+
+-   Classificação da variável raça em brancos e não brancos.
+
+-   Classificação da variável de posição na família em chefe de família ou não chefe.
+
+```{r}
+features_1 <- features |> 
+  rename(idade = V2009, genero = V2007) |> 
+  mutate(escolaridade = if_else(VD3004 %in% c("Médio completo ou equivalente", "Superior completo", "Superior incompleto ou equivalente"), "Ensino médio completo", "Ensino médio incompleto"),
+         raça = if_else(V2010 == "Branca", "Branco", "Não branco"),
+         posicao_familiar = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
+  select(-VD3004, -V2010, -V2005)
+```
+
+O tratamento a seguir está desagregado dos demais dada a sua maior complexidade. Realizaremos o cálculo do rendimento médio antes e depois da mobilidade, especificamente nos períodos analisados (que são 4 por indivíduo).
+
+Como os 4 períodos analisados divergem entre os indivíduos, iremos classifica-los conforme seu padrão.
+
+```{r}
+
+data_padrao <- data_mob_1 |> 
+  mutate(padrao = case_when(
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "TCP"        & `4` == "TCP"        ~ "padrao1",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "TCP"        & `5` == "TCP"        ~ "padrao2",
+      
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "ESPriv"     & `4` == "ESPriv"     ~ "padrao3",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "ESPriv"     & `5` == "ESPriv"     ~ "padrao4")) |> 
+  select(id, padrao)
+
+renda <- dados_tratados |> 
+  filter(id %in% data_padrao$id) |> 
+  select(id,V1016 ,VD4016) |> 
+  left_join(data_padrao, by = c("id" = "id"))
+
+renda$VD4016[is.na(renda$VD4016)] <- 0
+
+renda_wide <- renda |> 
+  pivot_wider(names_from = V1016, values_from = VD4016)
+
+renda_mobilidade <- renda_wide |> 
+  mutate(
+    renda_antes = case_when(
+      padrao %in% c("padrao1", "padrao3") ~ (`1` + `2`) / 2,
+      padrao %in% c("padrao2", "padrao4") ~ (`2` + `3`) / 2
+    ),
+    renda_depois = case_when(
+      padrao %in% c("padrao1", "padrao3") ~ (`3` + `4`) / 2,
+      padrao %in% c("padrao2", "padrao4") ~ (`4` + `5`) / 2
+    )
+  )
+```
+
+A seguir, iremos agregar a renda após a mobilidade na base de features. E por fim, juntaremos na base data_mob_1.
+
+```{r}
+features_2 <- renda_mobilidade |> 
+  select(id, renda_depois) |> 
+  left_join(features_1, by = c("id" = "id"))
+
+data_final <- data_mob_1 |> 
+  select(id, id_seq, transicao) |> 
+  left_join(features_2, by = c("id" = "id"))
+```
+
+### 4.1 Gênero
+
+```{r}
+genero_view1 <- data_final %>%
+  tabyl(genero, transicao) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+
+genero_view2 <- data_final %>%
+  tabyl(transicao, genero) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+```
+
+### 4.2 Escolaridade
+
+```{r}
+
+escolaridade_view1 <- data_final %>%
+  tabyl(escolaridade, transicao) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+
+escolaridade_view2 <- data_final %>%
+  tabyl(transicao, escolaridade) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+```
+
+### 4.3 Raça
+
+```{r}
+raça_view1 <- data_final %>%
+  tabyl(raça, transicao) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+
+raça_view2 <- data_final %>%
+  tabyl(transicao, raça) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+```
+
+### 4.4 Posição familiar
+
+```{r}
+posicao_view1 <- data_final %>%
+  tabyl(posicao_familiar, transicao) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
+
+posicao_view2 <- data_final %>%
+  tabyl(transicao, posicao_familiar) %>%
+  adorn_percentages("row") %>%
+  adorn_pct_formatting()
 ```
