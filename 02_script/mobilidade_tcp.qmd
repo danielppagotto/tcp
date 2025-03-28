@@ -38,7 +38,7 @@ A seguir iremos carregar a base de dados.
 
 ```{r}
 data_raiz <- vroom::vroom(
-  "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/tcp_espriv_5trimestres.csv",
+  "C:/Users/HP I3/OneDrive/Documentos/GitHub/tcp/tcp_espriv_5trimestres_v2.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 ```
@@ -48,6 +48,7 @@ A seguir, criaremos a variável Trimestre_ano, selecionaremos apenas maiores de 
 Observação: O trabalhador doméstico foi incluído como empregado do setor privado.
 
 ```{r}
+
 data <- data_raiz |> 
   mutate(Trimestre_Ano = paste(Trimestre, Ano, 
                                    sep = "-"),  .before = UF) |> 
@@ -246,11 +247,19 @@ genero_view1 <- data_final %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
 
+genero_view1
+
 genero_view2 <- data_final %>%
   tabyl(transicao, genero) %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
+
+genero_view2
 ```
+
+A tabela 1 mostra que, em convergência com balanceamento, que tanto homens e mulheres migram mais para o setor privado, no entanto essa proporção é ainda maior entre as mulheres (84,8%).
+
+A tabela 2 mostra que entre os que migraram para o setor privado, há maior equilíbrio de gênero, enquanto aqueles que migram para trabalho por conta própria têm maior predomínio de homens.
 
 ### 4.2 Escolaridade
 
@@ -261,11 +270,17 @@ escolaridade_view1 <- data_final %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
 
+escolaridade_view1
+
 escolaridade_view2 <- data_final %>%
   tabyl(transicao, escolaridade) %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
+
+escolaridade_view2
 ```
+
+Pelos resultados acima, a escolaridade, em termos de ensino médio, não apresenta diferença entre os que migraram para o setor privado ou trabalho por conta própria.
 
 ### 4.3 Raça
 
@@ -275,11 +290,17 @@ raça_view1 <- data_final %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
 
+raça_view1
+
 raça_view2 <- data_final %>%
   tabyl(transicao, raça) %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
+
+raça_view2
 ```
+
+Pelos resultados acima, possível ver que brancos migram mais para TCP.
 
 ### 4.4 Posição familiar
 
@@ -289,8 +310,25 @@ posicao_view1 <- data_final %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
 
+posicao_view1
+
 posicao_view2 <- data_final %>%
   tabyl(transicao, posicao_familiar) %>%
   adorn_percentages("row") %>%
   adorn_pct_formatting()
+
+posicao_view2
 ```
+
+Pelos resultados acima, é possível ver que pessoas que são responsáveis tem maior representatividade na mobilidade de carreira para o trabalho por conta própria.
+
+### 4.5 Renda após mobilidade
+
+```{r}
+data_final %>%
+  group_by(transicao) %>%
+  summarise(
+    media = mean(renda_depois, na.rm = TRUE))
+```
+
+A renda habitual média após a transição é muito próxima entre os que migram para TCP e para o setor priado.
