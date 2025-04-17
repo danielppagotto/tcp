@@ -4,9 +4,9 @@ format: html
 editor: visual
 ---
 
-# Análise de mobilidade de carreira de TCP.
+# Análise de mobilidade de carreira de TCP
 
-Nesse script analisaremos com base nos dados da PNAD contínua a mobilidade de carreira de pessoas em situação de desocupação para trabalho por conta próprio e emprego no setor privado. Os dados utilizados são provenientes da amostragem nos trimestres 04/2023 à 04/2024. Seguiremos a seguinte estrutura:
+Nesse script analisaremos com base nos dados da PNAD contínua a mobilidade de carreira de pessoas em situação de desocupação para trabalho por conta próprio e emprego no setor privado. Os dados utilizados são provenientes da amostragem nos trimestres 03/2023 à 04/2024. Seguiremos a seguinte estrutura:
 
 1.  Tratamento dos dados;
 2.  Codificação das narrativas ou processos em sequências;
@@ -30,6 +30,8 @@ library(stringr)
 library(ggseqplot)
 library(factoextra)
 library(janitor)
+library(patchwork)
+library(grid)
 ```
 
 ## 1. Tratamentos dos dados.
@@ -38,7 +40,7 @@ A seguir iremos carregar a base de dados.
 
 ```{r}
 data_raiz <- vroom::vroom(
-  "C:/Users/HP I3/OneDrive/Documentos/GitHub/tcp/tcp_espriv_5trimestres_v2.csv",
+  "C:/Users/alefs/Downloads/tcp_espriv_5trimestres_v3.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 ```
@@ -59,7 +61,7 @@ mutate(V4012_ajust =
            case_when(
                 V4012 == "Conta própria"  ~ "TCP",
                 V4012 == "Empregado do setor privado" ~ "ESPriv",
-                V4012 == "Trabalhador doméstico" ~ "ESPriv",
+                V4012 == "Trabalhador doméstico" ~ "TD",
                 V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
                 V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ 
                   "ESPub",  
@@ -80,23 +82,7 @@ data_2 <- data_1 |>
                                   "PFT"), .after = V4012_ajust)
 ```
 
-Como o objeto da análise reside sobre os desocupados, trabalhadores por conta própria e empregado do setor privado, iremos excluir as demais ocupações.
-
-```{r}
-excluindo_ocupacoes <- 
-            data_2 |> 
-                filter(ocupacao == "TFNR" | 
-                       ocupacao == "ESPub"|
-                       ocupacao == "EMP"  |
-                       ocupacao == "ESPub" |
-                       ocupacao == "PFT")
-
-excluindo_ocupacoes <- excluindo_ocupacoes$id
-
-dados_tratados <- data_2 |> 
-                    filter(!id %in% 
-                           excluindo_ocupacoes)
-```
+\*EXCLUIR TRABALHADORES RURAIS, OLHAR ESTADO, COLOCAR SETOR DE ATIVIDADE
 
 ## 2. Codificação das narrativas ou processos em sequências.
 
@@ -104,7 +90,7 @@ Nesta etapa, os processos são codificados em sequências.
 
 ```{r}
 data_long <- 
-  dados_tratados |>
+  data_2 |>
   select(id, V1016,ocupacao)
 
 #Transformando a estrutura de dados para wide
@@ -116,8 +102,11 @@ data_wide <- data_long |>
 # Colocando as colunas em ordem de entrevista e para caracteres
 data_ordem <- data_wide |> 
   relocate(id,`1`, `2`, `3`, `4`, `5`) |>
-  mutate(across(`1`:`5`, as.character)) 
+  mutate(across(`1`:`5`, as.character)) |> 
+    filter(if_all(2:6, ~ . != "NULL"))
 ```
+
+Observe que isso resultou em uma amostra de 144.378 indivíduos que completaram as cinco entrevistas no período analisado.
 
 ## 3. Mobilidade de carreira.
 
@@ -125,7 +114,6 @@ A mobilidade de carreira analisada será com relação aos indivíduos que após
 
 ```{r}
 data_mob_1 <- data_ordem  |> 
-  filter(if_all(2:6, ~ . != "NULL")) |>  
   mutate(id_seq = row_number()) |> 
   mutate(transicao = case_when(`1` == "Desocupado" &
                                `2` == "Desocupado" &
@@ -149,7 +137,11 @@ data_mob_1 <- data_ordem  |>
 data_mob_1 |> 
   count(transicao) |> 
   mutate(percentual = round(n / sum(n),2))
+
+
 ```
+
+Observe que foram identificados 563 pessoas que satisfizeram as condições de mobilidade descritas.
 
 ## 4.Análise descritiva.
 
@@ -157,7 +149,7 @@ Primeiros, iremos agregar as variáveis que serão analisadas através do id.
 
 ```{r}
 features <- 
-  dados_tratados |> 
+  data_2 |> 
   filter(id %in% data_mob_1$id,
          V1016 == 4) |> 
   select(id, V2009, V2007, VD3004, V2010, V2005, UF)
@@ -204,7 +196,7 @@ data_padrao <- data_mob_1 |>
       `4` == "ESPriv"     & `5` == "ESPriv"     ~ "padrao4")) |> 
   select(id, padrao)
 
-renda <- dados_tratados |> 
+renda <- data_2 |> 
   filter(id %in% data_padrao$id) |> 
   select(id,V1016 ,VD4016) |> 
   left_join(data_padrao, by = c("id" = "id"))
@@ -236,7 +228,17 @@ features_2 <- renda_mobilidade |>
 
 data_final <- data_mob_1 |> 
   select(id, id_seq, transicao) |> 
-  left_join(features_2, by = c("id" = "id"))
+  left_join(features_2, by = c("id" = "id")) |> 
+  mutate(regiao = case_when(
+    UF %in% c("Acre", "Amapá", "Amazonas", "Pará", "Rondônia", "Roraima", "Tocantins") ~ "Norte",
+    UF %in% c("Alagoas", "Bahia", "Ceará", "Maranhão", "Paraíba", "Pernambuco", "Piauí", "Rio Grande do Norte", "Sergipe") ~ "Nordeste",
+    UF %in% c("Distrito Federal", "Goiás", "Mato Grosso", "Mato Grosso do Sul") ~ "Centro-Oeste",
+    UF %in% c("Espírito Santo", "Minas Gerais", "Rio de Janeiro", "São Paulo") ~ "Sudeste",
+    UF %in% c("Paraná", "Rio Grande do Sul", "Santa Catarina") ~ "Sul",
+    TRUE ~ NA_character_
+  ))
+
+write.csv(data_final, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade.csv")
 ```
 
 ### 4.1 Gênero
@@ -260,6 +262,56 @@ genero_view2
 A tabela 1 mostra que, em convergência com balanceamento, que tanto homens e mulheres migram mais para o setor privado, no entanto essa proporção é ainda maior entre as mulheres (84,8%).
 
 A tabela 2 mostra que entre os que migraram para o setor privado, há maior equilíbrio de gênero, enquanto aqueles que migram para trabalho por conta própria têm maior predomínio de homens.
+
+```{r}
+genero_total <- data_final |> 
+  count(genero) |> 
+  mutate(prop = n / sum(n),
+         label = paste0(genero, "\n", "(", scales::percent(prop),")"))
+
+pizza_genero <- genero_total |> 
+  ggplot(aes(x = "", y = prop, fill = genero)) +
+  geom_col(widht = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            size = 5) +
+  labs(title = "Distribuição por gênero") +
+  theme_void() +
+  theme(legend.position = "none")
+
+homens_transicao <- data_final |> 
+  filter(genero == "Homem") |> 
+  count(transicao) |> 
+  mutate(prop = n / sum(n),
+         label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
+
+pizza_homens <- homens_transicao |> 
+  ggplot(aes(x = "", y = prop, fill = transicao)) +
+  geom_col(widht = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            size = 5) +
+  theme_void() +
+  theme(legend.position = "none")
+
+mulheres_transicao <- data_final |> 
+  filter(genero == "Mulher") |> 
+  count(transicao) |> 
+  mutate(prop = n / sum(n),
+         label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
+  
+pizza_mulheres <- mulheres_transicao |> 
+  ggplot(aes(x = "", y = prop, fill = transicao)) +
+  geom_col(widht = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = label),
+            position = position_stack(vjust = 0.5),
+            size = 5) +
+  theme_void() +
+  theme(legend.position = "none")
+```
 
 ### 4.2 Escolaridade
 

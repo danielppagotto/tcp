@@ -35,8 +35,8 @@ pnad_04_2023 <- base_pnad(2023, 4)
 
 
 #Criando loop para rodar função
-ano <- 2024
-trimestre <- 1:4
+ano <- 2023
+trimestre <- 2:3
 resultado <- list()
 for (ano in ano) {
   for (trimestre in trimestre) {
@@ -44,10 +44,10 @@ for (ano in ano) {
       base_pnad(ano = ano, trimestre = trimestre)
   }
 }
-resultado_2024 <- do.call(rbind, resultado)
+resultado_2023 <- do.call(rbind, resultado)
 
 #Juntando a base de 2017 e 2018
-resultado_final <- rbind(pnad_04_2023, resultado_2024)
+resultado_final_3 <- rbind(resultado_final_2, pnad_04_2023)
 
 #Salvando para fins de backup
 #write.csv(resultado_final,"C:/Users/alefs/Downloads/backup_pnad_042017_2018.csv")
@@ -57,7 +57,7 @@ resultado_final <- rbind(pnad_04_2023, resultado_2024)
 
 #Filtrando apenas os que responderam a variável V2008 e criando variável ID
 pnadc <- 
-  resultado_final |> 
+  resultado_final_3 |> 
   filter(V2008 != "99") |> 
   mutate(id = paste(UPA, V1008, V1014,
                     V2008, V20081, V20082,
@@ -67,9 +67,9 @@ pnadc <-
 #Filtrando apenas os que foram TCP ou desocupada ou fora da força de trabalho
 pnadc_tcp_pft_espriv <- 
   pnadc |> 
-  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" |
-           (VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas") | 
-           VD4001 == "Pessoas fora da força de trabalho")
+  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" | V4012 ==
+           "Trabalhador doméstico" |
+           (VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas"))
 
 
 #Identificando os que cumpriram com a condição anterior
@@ -97,4 +97,4 @@ tcp_espriv_5trim <-
   filter(id %in% vetor_tcp_5trimestres)
 
 #Salvando
-write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres.csv")
+write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres_v3.csv")
