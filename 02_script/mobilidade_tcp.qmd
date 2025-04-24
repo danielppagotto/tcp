@@ -32,6 +32,7 @@ library(factoextra)
 library(janitor)
 library(patchwork)
 library(grid)
+library(scales)
 ```
 
 ## 1. Tratamentos dos dados.
@@ -40,7 +41,7 @@ A seguir iremos carregar a base de dados.
 
 ```{r}
 data_raiz <- vroom::vroom(
-  "C:/Users/alefs/Downloads/tcp_espriv_5trimestres_v3.csv",
+  "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/tcp_espriv_5trimestres_v4.csv",
                        progress = FALSE,
                        show_col_types = FALSE)
 ```
@@ -54,7 +55,7 @@ Observação: O trabalhador doméstico foi incluído como empregado do setor pri
 data <- data_raiz |> 
   mutate(Trimestre_Ano = paste(Trimestre, Ano, 
                                    sep = "-"),  .before = UF) |> 
-  filter(V2009 >= 14)
+  filter(V2009 >= 18 & V1022 == "Urbana")
 
 data_1 <- data |> 
 mutate(V4012_ajust = 
@@ -130,8 +131,24 @@ data_mob_1 <- data_ordem  |>
                                `2` == "Desocupado" &
                                `3` == "Desocupado" &
                                 `4` == "ESPriv" &
-                                 `5` == "ESPriv" ~ "Migrou para o setor privado")) |> 
+                                 `5` == "ESPriv" ~ "Migrou para o setor privado"),
+         padrao = case_when(
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "TCP"        & `4` == "TCP"        ~ "padrao1",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "TCP"        & `5` == "TCP"        ~ "padrao2",
+      
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "ESPriv"     & `4` == "ESPriv"     ~ "padrao3",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "ESPriv"     & `5` == "ESPriv"     ~ "padrao4")) |> 
   filter(!is.na(transicao))
+
+data_3 <- data_mob_1 |> 
+  select(id, padrao) |> 
+  left_join(data_2, by = c("id" = "id"))
                                
 
 data_mob_1 |> 
@@ -148,11 +165,22 @@ Observe que foram identificados 563 pessoas que satisfizeram as condições de m
 Primeiros, iremos agregar as variáveis que serão analisadas através do id.
 
 ```{r}
+
+
 features <- 
-  data_2 |> 
-  filter(id %in% data_mob_1$id,
-         V1016 == 4) |> 
-  select(id, V2009, V2007, VD3004, V2010, V2005, UF)
+  data_3 |> 
+  filter(
+    id %in% data_mob_1$id,
+    case_when(
+      padrao %in% c("padrao1", "padrao3") ~ V1016 == 2,
+      padrao %in% c("padrao2" ,"padrao4")            ~ V1016 == 3,
+      TRUE                                ~ TRUE  # mantém outras linhas
+    )
+  ) |> 
+  select(id, V1023, V2009, V2007, VD3004, V2010, V2005, UF, V4076,
+         V40761, V40762, V40763)
+
+
 
 ```
 
@@ -238,30 +266,69 @@ data_final <- data_mob_1 |>
     TRUE ~ NA_character_
   ))
 
-write.csv(data_final, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade.csv")
+#write.csv(data_final, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade.csv")
+```
+
+```{r}
+data_final_2 <- data_final |> 
+  mutate(tempo_1 = case_when(V4076 == "Menos de 1 mês" ~ 1,
+                             V4076 == "De 1 ano a menos de 2 anos" ~ 12,
+                             TRUE ~ 0),
+         tempo_2 = if_else(is.na(V40761), 0, V40761),
+         tempo_3 = if_else(is.na(V40762), 0, V40762),
+         tempo_4 = if_else(is.na(V40763),0, V40763*12),
+         tempo_desemprego = tempo_1 + tempo_2 + tempo_3 + tempo_4) |>
+  select(-tempo_1, -tempo_2, -tempo_3, -tempo_4,
+         -V4076, - V40761, -V40762, -V40763)
+
+#write.csv(data_final_2, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade_v2.csv")
 ```
 
 ### 4.1 Gênero
 
 ```{r}
-genero_view1 <- data_final %>%
-  tabyl(genero, transicao) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+data_final_2 |> 
+  group_by(genero) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = genero)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 4
+  ) +
+  theme_void()
 
-genero_view1
+data_final_2 |>
+  filter(genero == "Homem") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 4
+  ) +
+  theme_void()
 
-genero_view2 <- data_final %>%
-  tabyl(transicao, genero) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+data_final_2 |>
+  filter(genero == "Mulher") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 4
+  ) +
+  theme_void()
 
-genero_view2
 ```
-
-A tabela 1 mostra que, em convergência com balanceamento, que tanto homens e mulheres migram mais para o setor privado, no entanto essa proporção é ainda maior entre as mulheres (84,8%).
-
-A tabela 2 mostra que entre os que migraram para o setor privado, há maior equilíbrio de gênero, enquanto aqueles que migram para trabalho por conta própria têm maior predomínio de homens.
 
 ```{r}
 genero_total <- data_final |> 
@@ -269,7 +336,7 @@ genero_total <- data_final |>
   mutate(prop = n / sum(n),
          label = paste0(genero, "\n", "(", scales::percent(prop),")"))
 
-pizza_genero <- genero_total |> 
+genero_total |> 
   ggplot(aes(x = "", y = prop, fill = genero)) +
   geom_col(widht = 1, color = "white") +
   coord_polar(theta = "y") +
@@ -286,7 +353,7 @@ homens_transicao <- data_final |>
   mutate(prop = n / sum(n),
          label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
 
-pizza_homens <- homens_transicao |> 
+homens_transicao |> 
   ggplot(aes(x = "", y = prop, fill = transicao)) +
   geom_col(widht = 1, color = "white") +
   coord_polar(theta = "y") +
@@ -302,7 +369,7 @@ mulheres_transicao <- data_final |>
   mutate(prop = n / sum(n),
          label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
   
-pizza_mulheres <- mulheres_transicao |> 
+mulheres_transicao |> 
   ggplot(aes(x = "", y = prop, fill = transicao)) +
   geom_col(widht = 1, color = "white") +
   coord_polar(theta = "y") +
@@ -311,6 +378,43 @@ pizza_mulheres <- mulheres_transicao |>
             size = 5) +
   theme_void() +
   theme(legend.position = "none")
+```
+
+### 4.1 Idade
+
+```{r}
+idade <- data_final_2 |> 
+  group_by(transicao) |> 
+  summarise(media_idade = mean(idade))
+
+
+data_final_2 |> 
+  ggplot(aes(x = transicao, y = idade, fill = transicao)) + 
+  geom_boxplot(
+    outlier.color = "red"
+  ) +
+  theme_minimal() +
+  labs(x = "Transição", y = "Idade")
+
+```
+
+### 4.1 Tempo de desemprego
+
+```{r}
+tempo_desemprego <- data_final_2 |> 
+  filter(tempo_desemprego < 24) |> 
+  group_by(transicao) |> 
+  summarise(tempo_desemprego = mean(tempo_desemprego))
+
+
+data_final_2 |> 
+  filter(tempo_desemprego < 24) |> 
+  ggplot(aes(x = transicao, y = tempo_desemprego, fill = tempo_desemprego)) + 
+  geom_boxplot(
+    outlier.color = "red"
+  ) +
+  theme_minimal() +
+  labs(x = "Transição", y = "Idade")
 ```
 
 ### 4.2 Escolaridade
