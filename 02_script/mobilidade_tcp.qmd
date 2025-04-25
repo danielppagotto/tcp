@@ -33,6 +33,7 @@ library(janitor)
 library(patchwork)
 library(grid)
 library(scales)
+library(RColorBrewer)
 ```
 
 ## 1. Tratamentos dos dados.
@@ -287,7 +288,7 @@ data_final_2 <- data_final |>
 ### 4.1 Gênero
 
 ```{r}
-data_final_2 |> 
+grafico_1 <- data_final_2 |> 
   group_by(genero) |> 
   count() |> 
   ggplot(aes(x = "", y = n, fill = genero)) +
@@ -296,11 +297,16 @@ data_final_2 |>
   geom_text(
     aes(label = percent(n / sum(n))),
     position = position_stack(vjust = 0.5),
-    color = "white", size = 4
+    color = "white", size = 10
   ) +
-  theme_void()
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
 
-data_final_2 |>
+#ggsave("grafico_1.png", plot = grafico_1, width = 6, height = 6, dpi = 300)
+
+grafico_2 <- data_final_2 |>
   filter(genero == "Homem") |> 
   group_by(transicao) |> 
   count() |> 
@@ -310,11 +316,17 @@ data_final_2 |>
   geom_text(
     aes(label = percent(n / sum(n))),
     position = position_stack(vjust = 0.5),
-    color = "white", size = 4
+    color = "white", size = 10
   ) +
-  theme_void()
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
 
-data_final_2 |>
+#ggsave("grafico_2.png", plot = grafico_2, width = 6, height = 6, dpi = 300)
+
+grafico_3 <- data_final_2 |>
   filter(genero == "Mulher") |> 
   group_by(transicao) |> 
   count() |> 
@@ -324,161 +336,300 @@ data_final_2 |>
   geom_text(
     aes(label = percent(n / sum(n))),
     position = position_stack(vjust = 0.5),
-    color = "white", size = 4
+    color = "white", size = 10
   ) +
-  theme_void()
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
 
+#ggsave("grafico_3.png", plot = grafico_3, width = 6, height = 6, dpi = 300)
 ```
 
-```{r}
-genero_total <- data_final |> 
-  count(genero) |> 
-  mutate(prop = n / sum(n),
-         label = paste0(genero, "\n", "(", scales::percent(prop),")"))
-
-genero_total |> 
-  ggplot(aes(x = "", y = prop, fill = genero)) +
-  geom_col(widht = 1, color = "white") +
-  coord_polar(theta = "y") +
-  geom_text(aes(label = label),
-            position = position_stack(vjust = 0.5),
-            size = 5) +
-  labs(title = "Distribuição por gênero") +
-  theme_void() +
-  theme(legend.position = "none")
-
-homens_transicao <- data_final |> 
-  filter(genero == "Homem") |> 
-  count(transicao) |> 
-  mutate(prop = n / sum(n),
-         label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
-
-homens_transicao |> 
-  ggplot(aes(x = "", y = prop, fill = transicao)) +
-  geom_col(widht = 1, color = "white") +
-  coord_polar(theta = "y") +
-  geom_text(aes(label = label),
-            position = position_stack(vjust = 0.5),
-            size = 5) +
-  theme_void() +
-  theme(legend.position = "none")
-
-mulheres_transicao <- data_final |> 
-  filter(genero == "Mulher") |> 
-  count(transicao) |> 
-  mutate(prop = n / sum(n),
-         label = paste0(transicao, "\n", "(", scales::percent(prop), ")"))
-  
-mulheres_transicao |> 
-  ggplot(aes(x = "", y = prop, fill = transicao)) +
-  geom_col(widht = 1, color = "white") +
-  coord_polar(theta = "y") +
-  geom_text(aes(label = label),
-            position = position_stack(vjust = 0.5),
-            size = 5) +
-  theme_void() +
-  theme(legend.position = "none")
-```
-
-### 4.1 Idade
+### 4.2 Idade
 
 ```{r}
 idade <- data_final_2 |> 
   group_by(transicao) |> 
-  summarise(media_idade = mean(idade))
+  summarise(media_idade = mean(idade),
+            mediana_idade = median(idade))
 
 
-data_final_2 |> 
+grafico_4 <- data_final_2 |> 
   ggplot(aes(x = transicao, y = idade, fill = transicao)) + 
-  geom_boxplot(
-    outlier.color = "red"
-  ) +
+  geom_boxplot(outlier.color = "red") +
   theme_minimal() +
-  labs(x = "Transição", y = "Idade")
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+
+#ggsave("grafico_4.png", plot = grafico_4, width = 6, height = 6, dpi = 300)
 
 ```
-
-### 4.1 Tempo de desemprego
-
-```{r}
-tempo_desemprego <- data_final_2 |> 
-  filter(tempo_desemprego < 24) |> 
-  group_by(transicao) |> 
-  summarise(tempo_desemprego = mean(tempo_desemprego))
-
-
-data_final_2 |> 
-  filter(tempo_desemprego < 24) |> 
-  ggplot(aes(x = transicao, y = tempo_desemprego, fill = tempo_desemprego)) + 
-  geom_boxplot(
-    outlier.color = "red"
-  ) +
-  theme_minimal() +
-  labs(x = "Transição", y = "Idade")
-```
-
-### 4.2 Escolaridade
-
-```{r}
-
-escolaridade_view1 <- data_final %>%
-  tabyl(escolaridade, transicao) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
-
-escolaridade_view1
-
-escolaridade_view2 <- data_final %>%
-  tabyl(transicao, escolaridade) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
-
-escolaridade_view2
-```
-
-Pelos resultados acima, a escolaridade, em termos de ensino médio, não apresenta diferença entre os que migraram para o setor privado ou trabalho por conta própria.
 
 ### 4.3 Raça
 
 ```{r}
-raça_view1 <- data_final %>%
-  tabyl(raça, transicao) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+grafico_5 <- data_final_2 |> 
+  group_by(raça) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = raça)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
 
-raça_view1
+#ggsave("grafico_5.png", plot = grafico_5, width = 6, height = 6, dpi = 300)
 
-raça_view2 <- data_final %>%
-  tabyl(transicao, raça) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+grafico_6 <- data_final_2 |>
+  filter(raça == "Branco") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
 
-raça_view2
+#ggsave("grafico_6.png", plot = grafico_6, width = 6, height = 6, dpi = 300)
+
+grafico_7 <- data_final_2 |>
+  filter(raça == "Não branco") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_7.png", plot = grafico_7, width = 6, height = 6, dpi = 300)
 ```
 
-Pelos resultados acima, possível ver que brancos migram mais para TCP.
-
-### 4.4 Posição familiar
+### 4.4 Tempo de desemprego
 
 ```{r}
-posicao_view1 <- data_final %>%
-  tabyl(posicao_familiar, transicao) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+tempo_desemprego_1 <- data_final_2 |> 
+  group_by(transicao) |> 
+  summarise(media = mean(tempo_desemprego),
+            mediana = median(tempo_desemprego))
 
-posicao_view1
 
-posicao_view2 <- data_final %>%
-  tabyl(transicao, posicao_familiar) %>%
-  adorn_percentages("row") %>%
-  adorn_pct_formatting()
+grafico_8 <- data_final_2 |> 
+  ggplot(aes(x = transicao, y = tempo_desemprego, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Meses de desemprego", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
 
-posicao_view2
+#ggsave("grafico_8.png", plot = grafico_8, width = 6, height = 6, dpi = 300)
+
+tempo_desemprego_2 <- data_final_2 |>
+  filter(tempo_desemprego < 36) |> 
+  group_by(transicao) |> 
+  summarise(media = mean(tempo_desemprego),
+            mediana = median(tempo_desemprego))
+
+
+grafico_9 <- data_final_2 |> 
+  filter(tempo_desemprego < 36) |> 
+  ggplot(aes(x = transicao, y = tempo_desemprego, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Meses de desemprego", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+
+#ggsave("grafico_9.png", plot = grafico_9, width = 6, height = 6, dpi = 300)
+
+tempo_desemprego_3 <- data_final_2 |>
+  filter(tempo_desemprego < 24) |> 
+  group_by(transicao) |> 
+  summarise(media = mean(tempo_desemprego),
+            mediana = median(tempo_desemprego))
+
+
+grafico_10 <- data_final_2 |> 
+  filter(tempo_desemprego < 24) |> 
+  ggplot(aes(x = transicao, y = tempo_desemprego, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Meses de desemprego", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+
+ggsave("grafico_10.png", plot = grafico_10, width = 6, height = 6, dpi = 300)
+
+
+```
+
+### 4.5 Escolaridade
+
+```{r}
+
+grafico_11 <- data_final_2 |> 
+  group_by(escolaridade) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = escolaridade)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_11.png", plot = grafico_11, width = 6, height = 6, dpi = 300)
+
+grafico_12 <- data_final_2 |>
+  filter(escolaridade == "Ensino médio completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_12.png", plot = grafico_12, width = 6, height = 6, dpi = 300)
+
+grafico_13 <- data_final_2 |>
+  filter(escolaridade == "Ensino médio incompleto") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_13.png", plot = grafico_13, width = 6, height = 6, dpi = 300)
+```
+
+Pelos resultados acima, a escolaridade, em termos de ensino médio, não apresenta diferença entre os que migraram para o setor privado ou trabalho por conta própria.
+
+### 4.6 Posição familiar
+
+```{r}
+grafico_14 <- data_final_2 |> 
+  group_by(posicao_familiar) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = posicao_familiar)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_14.png", plot = grafico_14, width = 10, height = 6, dpi = 300)
+
+grafico_15 <- data_final_2 |>
+  filter(posicao_familiar == "Responsável pelo domicílio") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_15.png", plot = grafico_15, width = 6, height = 6, dpi = 300)
+
+grafico_16 <- data_final_2 |>
+  filter(posicao_familiar == "Não responsável pelo domicílio") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_16.png", plot = grafico_16, width = 6, height = 6, dpi = 300)
 ```
 
 Pelos resultados acima, é possível ver que pessoas que são responsáveis tem maior representatividade na mobilidade de carreira para o trabalho por conta própria.
 
-### 4.5 Renda após mobilidade
+### 4.7 Renda após mobilidade
 
 ```{r}
 data_final %>%
