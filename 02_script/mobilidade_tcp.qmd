@@ -47,9 +47,7 @@ data_raiz <- vroom::vroom(
                        show_col_types = FALSE)
 ```
 
-A seguir, criaremos a variável Trimestre_ano, selecionaremos apenas maiores de 14, e desenvolveremos a variável ocupação para fins da análise.
-
-Observação: O trabalhador doméstico foi incluído como empregado do setor privado.
+A seguir, criaremos a variável Trimestre_ano, selecionaremos apenas maiores de 14, filtraremos trabalhadores urbanos e desenvolveremos a variável ocupação para fins da análise.
 
 ```{r}
 
@@ -84,8 +82,6 @@ data_2 <- data_1 |>
                                   "PFT"), .after = V4012_ajust)
 ```
 
-\*EXCLUIR TRABALHADORES RURAIS, OLHAR ESTADO, COLOCAR SETOR DE ATIVIDADE
-
 ## 2. Codificação das narrativas ou processos em sequências.
 
 Nesta etapa, os processos são codificados em sequências.
@@ -108,11 +104,11 @@ data_ordem <- data_wide |>
     filter(if_all(2:6, ~ . != "NULL"))
 ```
 
-Observe que isso resultou em uma amostra de 144.378 indivíduos que completaram as cinco entrevistas no período analisado.
+Observe que isso resultou em uma amostra de 64.485 indivíduos que completaram as cinco entrevistas no período analisado.
 
 ## 3. Mobilidade de carreira.
 
-A mobilidade de carreira analisada será com relação aos indivíduos que após permanecerem por pelo menos dois períodos subsequentes em situação em desocupação migraram para trabalho por conta própria ou emprego no setor privado permanecendo por pelo menos mais dois trimestres.
+A mobilidade de carreira analisada será com relação aos indivíduos que após permanecerem por pelo menos dois períodos subsequentes em situação de desocupação migraram para trabalho por conta própria ou emprego no setor privado permanecendo por pelo menos mais dois trimestres.
 
 ```{r}
 data_mob_1 <- data_ordem  |> 
@@ -159,7 +155,7 @@ data_mob_1 |>
 
 ```
 
-Observe que foram identificados 563 pessoas que satisfizeram as condições de mobilidade descritas.
+Observe que foram identificados 438 pessoas que satisfizeram as condições de mobilidade descritas.
 
 ## 4.Análise descritiva.
 
@@ -178,7 +174,7 @@ features <-
       TRUE                                ~ TRUE  # mantém outras linhas
     )
   ) |> 
-  select(id, V1023, V2009, V2007, VD3004, V2010, V2005, UF, V4076,
+  select(id, V1023, V2009, V2007, VD3004,VD3005, V2010, V2005, UF, V4076,
          V40761, V40762, V40763)
 
 
@@ -198,10 +194,12 @@ A seguir iremos fazer os seguintes tratamentos.
 ```{r}
 features_1 <- features |> 
   rename(idade = V2009, genero = V2007) |> 
-  mutate(escolaridade = if_else(VD3004 %in% c("Médio completo ou equivalente", "Superior completo", "Superior incompleto ou equivalente"), "Ensino médio completo", "Ensino médio incompleto"),
+  mutate(ensino_medio = if_else(VD3004 %in% c("Médio completo ou equivalente", "Superior completo", "Superior incompleto ou equivalente"), "Ensino médio completo", "Ensino médio incompleto"),
+         ensino_superior = if_else(VD3004 == "Superior completo", "Superior completo", "Sem superior completo"),
+         anos_estudos = replace_na(as.numeric(substring(VD3005,1,2)),0),
          raça = if_else(V2010 == "Branca", "Branco", "Não branco"),
          posicao_familiar = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
-  select(-VD3004, -V2010, -V2005)
+  select(-V2005, -VD3005)
 ```
 
 O tratamento a seguir está desagregado dos demais dada a sua maior complexidade. Realizaremos o cálculo do rendimento médio antes e depois da mobilidade, especificamente nos períodos analisados (que são 4 por indivíduo).
@@ -270,6 +268,8 @@ data_final <- data_mob_1 |>
 #write.csv(data_final, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade.csv")
 ```
 
+A seguir, o tratamento do tempo de desemprego em meses.
+
 ```{r}
 data_final_2 <- data_final |> 
   mutate(tempo_1 = case_when(V4076 == "Menos de 1 mês" ~ 1,
@@ -282,7 +282,7 @@ data_final_2 <- data_final |>
   select(-tempo_1, -tempo_2, -tempo_3, -tempo_4,
          -V4076, - V40761, -V40762, -V40763)
 
-#write.csv(data_final_2, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade_v2.csv")
+write.csv(data_final_2, "C:/Users/alefs/OneDrive/Documentos/GitHub/tcp/01_dados/data_mobilidade_v3.csv")
 ```
 
 ### 4.1 Gênero
@@ -502,12 +502,14 @@ ggsave("grafico_10.png", plot = grafico_10, width = 6, height = 6, dpi = 300)
 
 ### 4.5 Escolaridade
 
+#### 4.5.1 Ensino médio
+
 ```{r}
 
 grafico_11 <- data_final_2 |> 
-  group_by(escolaridade) |> 
+  group_by(ensino_medio) |> 
   count() |> 
-  ggplot(aes(x = "", y = n, fill = escolaridade)) +
+  ggplot(aes(x = "", y = n, fill = ensino_medio)) +
   geom_col(width = 1) +
   coord_polar(theta = "y") +
   geom_text(
@@ -520,10 +522,10 @@ grafico_11 <- data_final_2 |>
         legend.text = element_text(size = 16)) +
   labs(fill = NULL)
 
-ggsave("grafico_11.png", plot = grafico_11, width = 6, height = 6, dpi = 300)
+#ggsave("grafico_11.png", plot = grafico_11, width = 6, height = 6, dpi = 300)
 
 grafico_12 <- data_final_2 |>
-  filter(escolaridade == "Ensino médio completo") |> 
+  filter(ensino_medio == "Ensino médio completo") |> 
   group_by(transicao) |> 
   count() |> 
   ggplot(aes(x = "", y = n, fill = transicao)) +
@@ -540,10 +542,10 @@ grafico_12 <- data_final_2 |>
         legend.text = element_text(size = 16)) +
   labs(fill = NULL)
 
-ggsave("grafico_12.png", plot = grafico_12, width = 6, height = 6, dpi = 300)
+#ggsave("grafico_12.png", plot = grafico_12, width = 6, height = 6, dpi = 300)
 
 grafico_13 <- data_final_2 |>
-  filter(escolaridade == "Ensino médio incompleto") |> 
+  filter(ensino_medio == "Ensino médio incompleto") |> 
   group_by(transicao) |> 
   count() |> 
   ggplot(aes(x = "", y = n, fill = transicao)) +
@@ -560,10 +562,105 @@ grafico_13 <- data_final_2 |>
         legend.text = element_text(size = 16)) +
   labs(fill = NULL)
 
-ggsave("grafico_13.png", plot = grafico_13, width = 6, height = 6, dpi = 300)
+#ggsave("grafico_13.png", plot = grafico_13, width = 6, height = 6, dpi = 300)
 ```
 
 Pelos resultados acima, a escolaridade, em termos de ensino médio, não apresenta diferença entre os que migraram para o setor privado ou trabalho por conta própria.
+
+#### 4.5.2 Ensino superior
+
+```{r}
+grafico_11.2 <- data_final_2 |> 
+  group_by(ensino_superior) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = ensino_superior)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_11.2.png", plot = grafico_11.2, width = 6, height = 6, dpi = 300)
+
+grafico_12.2 <- data_final_2 |>
+  filter(ensino_superior == "Superior completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_12.2.png", plot = grafico_12.2, width = 6, height = 6, dpi = 300)
+
+grafico_13.2 <- data_final_2 |>
+  filter(ensino_superior == "Sem superior completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+ggsave("grafico_13.2.png", plot = grafico_13.2, width = 6, height = 6, dpi = 300)
+```
+
+#### 4.5.1 Anos de estudo
+
+```{r}
+anos_estudos <- data_final_2 |> 
+  group_by(transicao) |> 
+  summarise(media = mean(anos_estudos),
+            mediana = median(anos_estudos))
+
+grafico_4.5.1 <- data_final_2 |> 
+  ggplot(aes(x = transicao, y = anos_estudos, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Anos de estudo", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+
+ggsave("grafico_4.5.1.png", plot = grafico_4.5.1, width = 6, height = 6, dpi = 300)
+
+
+data_final_2 |> 
+  ggplot(aes(x = anos_estudos, fill = transicao)) + 
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ transicao, scales = "free_y") +
+  theme_minimal() +
+  labs(x = "Anos de estudos", y = "Densidade", fill = NULL) +
+  theme(
+    legend.position = "none"  # tira a legenda, já que vai ter facetas
+  )
+```
 
 ### 4.6 Posição familiar
 
