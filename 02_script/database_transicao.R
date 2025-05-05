@@ -36,19 +36,23 @@ pnad_04_2023 <- base_pnad(2023, 4)
 
 
 #Criando loop para rodar função
-ano <- 2023
-trimestre <- 2:4
+anos <- 2019:2024
+trimestres <- 1:3
 resultado <- list()
-for (ano in ano) {
-  for (trimestre in trimestre) {
+
+for (ano in anos) {
+  for (trimestre in trimestres) {
+    cat("Ano:", ano, "- Trimestre:", trimestre, "\n")
     resultado[[length(resultado) + 1]] <-
       base_pnad(ano = ano, trimestre = trimestre)
   }
 }
-resultado_2023 <- do.call(rbind, resultado)
+
+
+resultado_2 <- do.call(rbind, resultado)
 
 #Juntando a base de 2017 e 2018
-resultado_final <- rbind(resultado_2023,resultado_2024)
+resultado_final <- rbind(resultado_1,resultado_2)
 
 #Salvando para fins de backup
 #write.csv(resultado_final,"C:/Users/alefs/Downloads/backup_pnad_042017_2018.csv")
@@ -98,4 +102,4 @@ tcp_espriv_5trim <-
   filter(id %in% vetor_tcp_5trimestres)
 
 #Salvando
-write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres_v4.csv")
+write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres_v5.csv")
