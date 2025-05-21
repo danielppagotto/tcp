@@ -36,8 +36,8 @@ pnad_04_2023 <- base_pnad(2023, 4)
 
 
 #Criando loop para rodar função
-anos <- 2019:2024
-trimestres <- 1:3
+anos <- 2018:2024
+trimestres <- 1:4
 resultado <- list()
 
 for (ano in anos) {
@@ -49,7 +49,7 @@ for (ano in anos) {
 }
 
 
-resultado_2 <- do.call(rbind, resultado)
+resultado_final <- do.call(rbind, resultado)
 
 #Juntando a base de 2017 e 2018
 resultado_final <- rbind(resultado_1,resultado_2)
@@ -70,36 +70,80 @@ pnadc <-
 
 
 #Filtrando apenas os que foram TCP ou desocupada ou fora da força de trabalho
-pnadc_tcp_pft_espriv <- 
+filtro_ocupacao <- 
   pnadc |> 
-  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" | V4012 ==
-           "Trabalhador doméstico" |
+  filter(V1022 == "Urbana") |> 
+  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" |
            (VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas"))
 
-
-#Identificando os que cumpriram com a condição anterior
-vetor_tcp_espriv <- unique(pnadc_tcp_pft_espriv$id)
+vetor <- unique(filtro_ocupacao$id)
 
 
 #Filtrando a base apenas com os que cumpriram a condição
-pnadc_tcp_espriv_todos <- 
+pnadc_2 <- 
   pnadc |> 
-  filter(id %in% vetor_tcp_espriv)
+  filter(id %in% vetor)
 
 
 # Pegando apenas pessoas que tiveram exatamente 5 entrevistas 
-id_pnadc_trimestres <- pnadc_tcp_espriv_todos |> 
+filtro_trimestres <- pnadc_2 |> 
                         group_by(id) |> 
                         count() |> 
                         filter(n == 5)
 
 #Identificando os ID
-vetor_tcp_5trimestres <- unique(id_pnadc_trimestres$id)
+vetor_trimestres <- unique(filtro_trimestres$id)
 
 #Filtrando os ID
-tcp_espriv_5trim <- 
-  pnadc_tcp_espriv_todos |> 
-  filter(id %in% vetor_tcp_5trimestres)
+pnadc_final <- 
+  pnadc_2 |> 
+  filter(id %in% vetor_trimestres) |> 
+  mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-"))
+
+codigos_domicilio <- unique(pnadc_final$cod_dom)
+
+
+# Adicionando variáveis ---------------------------------------------------
+
+qtd_pessoas <- pnadc |> 
+  mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-")) |> 
+  filter(cod_dom %in% codigos_domicilio) |> 
+  group_by(cod_dom) |> 
+  summarise(qtd_pessoas = n()/5) |> 
+  ungroup()
+
+data_1 <- pnadc_final |> 
+  left_join(qtd_pessoas, by = "cod_dom")
+
+renda_media <- pnadc |> 
+  mutate(renda = if_else(is.na(VD4016),0, VD4016)) |> 
+  mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-")) |> 
+  filter(cod_dom %in% codigos_domicilio) |> 
+  group_by(cod_dom, V1016) |> 
+  summarise(renda_familiar_media = mean(renda, na.rm = TRUE))
+
+data_2 <- data_1 |> 
+  left_join(renda_media, by = c("cod_dom", "V1016"))
+
+qtd_filhos <- pnadc |> 
+  mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-")) |> 
+  filter(cod_dom %in% codigos_domicilio) |> 
+  filter(V2009 < 14) |> 
+  select(cod_dom, V1016, V2005) |> 
+  filter(V2005 %in% c("Filho(a) somente do responsável", 
+                      "Filho(a) do responsável e do cônjuge")) |> 
+  group_by(cod_dom, V1016, V2005) |> 
+  count() |> 
+  mutate(V2005 = if_else(V2005 == "Filho(a) somente do responsável", "filho_responsavel",
+                         "filho_responsavel_conjuge")) |> 
+  pivot_wider(names_from = V2005, values_from = n) |> 
+  mutate(filho_responsavel = if_else(is.na(filho_responsavel), 0, filho_responsavel),
+         filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
+
+data_3 <- data_2 |> 
+  left_join(qtd_filhos, by = c("cod_dom", "V1016")) |> 
+  mutate(filho_responsavel = if_else(is.na(filho_responsavel), 0, filho_responsavel),
+         filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
 
 #Salvando
-write.csv(tcp_espriv_5trim,"tcp_espriv_5trimestres_v5.csv")
+write.csv(data_3,"data_mobilidade.csv")
