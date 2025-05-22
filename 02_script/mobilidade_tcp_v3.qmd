@@ -76,7 +76,8 @@ data <- data_raiz |>
                             competen < "2020-04-01" ~ "Pré-pandemia",
   competen >= "2023-04-01" ~ "Pós-pandemia",
   competen >= "2020-04-01" & competen < "2023-04-01" ~ "Pandemia"
-))
+)) |> 
+  filter(V2009 <= 65)
 ```
 
 #### 1.1. Estruturação em sequência.
@@ -145,7 +146,7 @@ data_mob |>
   mutate(percentual = round(n / sum(n),2))
 ```
 
-Foram identificados 4.717 indivíduos que cumpriram com as condições de análise. Desses, 75% migraram para o setor privado e o os demais para o trabalho por conta própria.
+Foram identificados 4.708 indivíduos que cumpriram com as condições de análise. Desses, 75% migraram para o setor privado e o os demais para o trabalho por conta própria.
 
 ### 2. Análise descritiva.
 
@@ -232,35 +233,17 @@ data_final <- data_mob |>
   left_join(renda_domicilio, by = "id") |> 
   left_join(renda_individual, by = "id") |> 
   select(-`1`, -`2`, -`3`, -`4`, -`5`, -padrao)
+
+data_pospandemia <- data_final |> 
+  filter(periodo_ajust == "Pós-pandemia")
 ```
 
-descritivo_numerica \<- function(variavel) {
-
-data_final %\>%
-
-group_by(transicao)
-
-summarise(across({{variavel}}, list(
-
-media = \~mean(.x, na.rm = TRUE),
-
-desvio = \~sd(.x, na.rm = TRUE),
-
-mediana = \~median(.x, na.rm = TRUE),
-
-minimo = \~min(.x, na.rm = TRUE),
-
-maximo = \~max(.x, na.rm = TRUE)
-
-)))
-
-}
+Antes de entrarmos na análise descritiva propriamente dita, iremos definir as funções que serão úteis, filtrando apenas o período de pós-pandemia.
 
 ```{r}
 descritivo_categorica <- function(variavel) {
   
-  data_final |> 
-    filter(periodo_ajust == "Pós-pandemia") |> 
+  data_pospandemia |> 
   count({{variavel}}, transicao) |> 
   pivot_wider(names_from = transicao, values_from = n) |> 
   mutate(percentual_tcp = `Migrou para TCP`/ (`Migrou para TCP` +
@@ -270,7 +253,7 @@ descritivo_categorica <- function(variavel) {
 }
 
 descritivo_numerica <- function(variavel) {
-  data_final %>%
+  data_pospandemia %>%
     group_by(transicao) |> 
     summarise(across({{variavel}}, list(
       media = ~mean(.x, na.rm = TRUE),
@@ -284,14 +267,18 @@ descritivo_numerica <- function(variavel) {
 
 #### 2.2. Localidade.
 
+A seguir iremos analisar o percentual de migrações por região de saúde e em seguida por unidade federativa.
+
 ##### 2.2.1 Região do Brasil.
 
 ```{r}
 
+
 descritivo_regiao <- descritivo_categorica(regiao)
 
+chisq.test(table(data_pospandemia$regiao, data_pospandemia$transicao))
 
-data_final %>%
+data_pospandemia %>%
   filter(periodo_ajust == "Pós-pandemia") |> 
   count(regiao, transicao) %>%
   group_by(regiao) %>%
@@ -311,12 +298,17 @@ data_final %>%
 
 ```
 
+Observe que o maior percentual de mobilidade para trabalho por conta própria foi na região Sudeste com 22,5% e o menor, no Centro-Oeste com 17,4%.
+
 ##### 2.2.2 Unidade Federativa
 
 ```{r}
 descritivo_uf <- descritivo_categorica(UF)
 
-data_final %>%
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$UF))
+
+
+data_pospandemia %>%
   filter(periodo_ajust == "Pós-pandemia") |> 
   count(UF, transicao) %>%
   group_by(UF) %>%
@@ -336,12 +328,16 @@ data_final %>%
 
 ```
 
+O Estado que teve a maior proporção de mobilidade para o trabalho por conta própria foi Amapá com 36,4%, enquanto Tocantins, Sergipe e Rondônia não houve registros de pessoas que saíram de desocupação para TCP.
+
 #### 2.3. Gênero.
 
 ```{r}
 descritivo_genero <- descritivo_categorica(genero)
 
-data_final |> 
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$genero))
+
+data_pospandemia |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
   group_by(genero) |> 
   count() |> 
@@ -403,10 +399,16 @@ data_final |>
 #ggsave("grafico_3.png", plot = grafico_3, width = 6, height = 6, dpi = 300)
 ```
 
+O percentual de homens é de 57%, do qual possui uma mobilidade maior para o trabalho por conta própria (23%) contra as mulheres (18%).
+
 #### 2.4. Idade.
 
 ```{r}
 descritivo_idade <- descritivo_numerica(idade)
+
+shapiro.test(data_final$idade[data_final$periodo_ajust == "Pós-pandemia"]) #Teste de normalidade
+bartlett.test(idade ~ transicao, data = teste) #Teste de variância
+wilcox.test(idade ~ transicao, data = teste) # Teste de diferença
 
 data_final |> 
   ggplot(aes(x = idade)) + 
@@ -432,8 +434,10 @@ data_final |>
 ```{r}
  descritivo_raça <- descritivo_categorica(raça)
  
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$raça))
+ 
 
-data_final |> 
+data_pospandemia |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
   group_by(raça) |> 
   count() |> 
@@ -452,7 +456,7 @@ data_final |>
 
 #ggsave("grafico_5.png", plot = grafico_5, width = 6, height = 6, dpi = 300)
 
-data_final |>
+data_pospandemia |>
   filter(periodo_ajust == "Pós-pandemia") |> 
   filter(raça == "Branco") |> 
   group_by(transicao) |> 
@@ -473,7 +477,7 @@ data_final |>
 
 #ggsave("grafico_6.png", plot = grafico_6, width = 6, height = 6, dpi = 300)
 
-data_final |>
+data_pospandemia |>
   filter(periodo_ajust == "Pós-pandemia") |> 
   filter(raça == "Não branco") |> 
   group_by(transicao) |> 
@@ -502,6 +506,8 @@ data_final |>
 
 ```{r}
 descritivo_ensino_medio <- descritivo_categorica(ensino_medio)
+
+chisq.test(data_pospandemia$transicao, data_pospandemia$ensino_medio)
 
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
@@ -570,6 +576,8 @@ data_final |>
 ```{r}
 descritivo_ensino_superior <- descritivo_categorica(ensino_superior)
 
+chisq.test(data_pospandemia$transicao, data_pospandemia$ensino_superior)
+
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
   group_by(ensino_superior) |> 
@@ -632,10 +640,12 @@ data_final |>
 #ggsave("grafico_13.2.png", plot = grafico_13.2, width = 6, height = 6, dpi = 300)
 ```
 
-2.7. Posição familiar.
+#### 2.7. Posição familiar.
 
 ```{r}
 descritivo_posicaofamiliar <- descritivo_categorica(posicao_familiar)
+
+chisq.test(data_pospandemia$transicao, data_pospandemia$posicao_familiar)
 
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
@@ -704,6 +714,10 @@ data_final |>
 ```{r}
 descritivo_desemprego <- descritivo_numerica(tempo_desemprego)
 
+shapiro.test(data_pospandemia$tempo_desemprego)
+bartlett.test(tempo_desemprego ~ transicao, data = data_pospandemia)
+wilcox.test(tempo_desemprego ~ transicao, data = data_pospandemia)
+
 quantile(data_final$tempo_desemprego, probs = c(0.2, 0.4, 0.6, 0.8), na.rm = TRUE)
 
 data_final |> 
@@ -733,6 +747,10 @@ data_final |>
 ```{r}
 descritivo_pessoasdomicilio <- descritivo_numerica(qtd_pessoas)
 
+shapiro.test(data_pospandemia$qtd_pessoas)
+bartlett.test(qtd_pessoas ~ transicao, data = data_pospandemia)
+wilcox.test(qtd_pessoas ~ transicao, data = data_pospandemia)
+
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
   ggplot(aes(x = qtd_pessoas)) + 
@@ -759,6 +777,10 @@ data_final |>
 ```{r}
 descritivo_rendadomicilio <- descritivo_numerica(renda_domiciliar)
 
+shapiro.test(data_pospandemia$renda_domiciliar)
+bartlett.test(renda_domiciliar ~ transicao, data = data_pospandemia)
+wilcox.test(renda_domiciliar ~ transicao, data = data_pospandemia)
+
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
   ggplot(aes(x = renda_domiciliar)) + 
@@ -784,6 +806,10 @@ data_final |>
 
 ```{r}
 descritivo_filhos <- descritivo_numerica(filhos)
+
+shapiro.test(data_pospandemia$filhos)
+bartlett.test(filhos ~ transicao, data = data_pospandemia)
+wilcox.test(filhos ~ transicao, data = data_pospandemia)
 
 data_final |> 
   filter(periodo_ajust == "Pós-pandemia") |> 
