@@ -96,7 +96,7 @@ data_wide <-
     filter(if_all(2:6, ~ . != "NULL"))
 ```
 
-Foram identificados 422.152 indivíduos que completaram a pesquisa no período analisado. No entanto, muitos deles não fazem parte do escopo de análise, isto é, pessoas que saíram de situação de desocupação para TSP ou TCP.
+Foram identificados 422.152 indivíduos que completaram a pesquisa no período analisado. No entanto, muitos deles não fazem parte do escopo de análise, isto é, pessoas que não saíram de situação de desocupação para TSP ou TCP.
 
 #### 1.2. Filtrando mobilidades de carreira.
 
@@ -175,6 +175,8 @@ features <-
          V40761, V40762, V40763, qtd_pessoas, periodo_ajust,
          filho_responsavel, filho_responsavel_conjuge) |> 
   rename(idade = V2009, genero = V2007) |> 
+  
+  #ESCOLARIDADE
   mutate(ensino_medio = if_else(VD3004 %in% c("Médio completo ou equivalente", "Superior completo", "Superior incompleto ou equivalente"), "Ensino médio completo", "Ensino médio incompleto"),
          ensino_superior = if_else(VD3004 == "Superior completo", "Superior completo", "Sem superior completo"),
          raça = if_else(V2010 == "Branca", "Branco", "Não branco"),
@@ -196,6 +198,8 @@ features <-
                             V2005 %in% c("Cônjuge ou companheiro(a) de sexo diferente", "Cônjuge ou companheiro(a) do mesmo sexo") ~ filho_responsavel_conjuge,
                                          TRUE ~ 0)) |> 
   select(-filho_responsavel, -filho_responsavel_conjuge) |> 
+  
+  #CRIANDO VARIÁVEL REGIÃO
   mutate(regiao = case_when(
     UF %in% c("Acre", "Amapá", "Amazonas", "Pará", "Rondônia", "Roraima", "Tocantins") ~ "Norte",
     UF %in% c("Alagoas", "Bahia", "Ceará", "Maranhão", "Paraíba", "Pernambuco", "Piauí", "Rio Grande do Norte", "Sergipe") ~ "Nordeste",
