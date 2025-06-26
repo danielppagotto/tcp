@@ -24,7 +24,7 @@ base_pnad <- function(ano, trimestre){
            VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
            VD3004, VD3005, VD4010, VD4011, VD4019, VD4015,
            VD4016, VD4017, VD4019, VD4020, VD2002, V2005,
-           V4076, V40761, V40762, V40763
+           V4076, V40761, V40762, V40763, V1028
 )
 }
 
@@ -36,7 +36,7 @@ pnad_04_2023 <- base_pnad(2023, 4)
 
 
 #Criando loop para rodar função
-anos <- 2018:2024
+anos <- 2023:2024
 trimestres <- 1:4
 resultado <- list()
 
@@ -72,9 +72,7 @@ pnadc <-
 #Filtrando apenas os que foram TCP ou desocupada ou fora da força de trabalho
 filtro_ocupacao <- 
   pnadc |> 
-  filter(V1022 == "Urbana") |> 
-  filter(V4012 == "Conta própria" | V4012 == "Empregado do setor privado" |
-           (VD4001 == "Pessoas na força de trabalho" & VD4002 == "Pessoas desocupadas"))
+  filter(V4012 == "Conta própria")
 
 vetor <- unique(filtro_ocupacao$id)
 
@@ -108,8 +106,8 @@ codigos_domicilio <- unique(pnadc_final$cod_dom)
 qtd_pessoas <- pnadc |> 
   mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-")) |> 
   filter(cod_dom %in% codigos_domicilio) |> 
-  group_by(cod_dom) |> 
-  summarise(qtd_pessoas = n()/5) |> 
+  group_by(cod_dom, V1016) |> 
+  count() |> 
   ungroup()
 
 data_1 <- pnadc_final |> 
@@ -146,4 +144,4 @@ data_3 <- data_2 |>
          filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
 
 #Salvando
-write.csv(data_3,"data_mobilidade.csv")
+write.csv(pnadc_final,"as_2023_2024.csv")
