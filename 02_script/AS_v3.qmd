@@ -1,0 +1,392 @@
+---
+title: "Análise de sequência"
+format: html
+editor: visual
+---
+
+# 1. Análise de sequência
+
+A análise de sequência contém três etapas principais:
+
+1.  Codificação das narrativas ou processos em sequências;
+
+2.  Mensuração das dissimilaridades dos indivíduos par a par ;
+
+3.  Aplicação de técnica de redução de dimensionalidade (ex.: análise de cluster) para agrupar sequências similares.
+
+Antes de adentrar nestas etapas, vamos trabalhar com o tratamento dos dados conforme script a seguir.
+
+## 1.1. Tratamento dos dados (2023-2024)
+
+A base de dados utilizada neste script, é a de trabalhadores que participaram de pelo menos cinco entrevistas em cinco trimestres seguidos, e que foram TCP em algum momento.
+
+Carregando pacotes necessários.
+
+```{r}
+#| message: false
+#| warning: false
+#| paged-print: false
+
+options(scipen = 999)
+
+library(TraMineR)
+library(tidyverse)
+library(TraMineRextras)
+library(FactoMineR)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(stringr)
+library(ggseqplot)
+library(factoextra)
+library(readxl)
+```
+
+A seguir é selecionada as variáveis que serão importantes para análises e definida a variável *Trimestre_Ano*.
+
+```{r}
+#| message: false
+#| warning: false
+#| paged-print: false
+
+data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024.csv")
+
+data_1 <- data_0 |>   
+        select(id, Ano, Trimestre, UF, 
+               UPA, Estrato, 
+               V1008,V4012,V1014,V1022,
+               V1016, V2007, V2008, V20081, 
+               V20082, V2009,
+               VD4001,VD4002, VD3004, V4039,
+               VD4010, V4032, V4019, V2010,
+               V2005, VD4016) |>  
+  mutate(Trimestre_Ano = paste(Trimestre, 
+                           Ano, sep = "-"), 
+                           .before = UF)
+```
+
+O objeto de análise é a categoria de ocupação (V4012). Para isso serão necessárias algumas adaptações. A primeira é reduzir o número de categorias considerando a natureza delas e para fins de simplificação de análise. A tabela abaixo sintetiza as transformações realizadas.
+
++-----------------------------------------------+-------------------------------+--------------+
+| Antes do tratamento                           | Após o tratamento             | Abreviação   |
++===============================================+:=============================:+:============:+
+| -   Empregado do setor privado. (V4012)       | Empregado do setor privado    | ESPR         |
+|                                               |                               |              |
+| -   Trabalhador doméstico. (V4012)            |                               |              |
++-----------------------------------------------+-------------------------------+--------------+
+| -   Pessoa fora da força de tratalho (VD4001) | Fora do trabalho              | PFT          |
+|                                               |                               |              |
+| -   Pessoa desocupada (VD4002)                |                               |              |
++-----------------------------------------------+-------------------------------+--------------+
+| -   Conta própria. (V4012)                    | Trabalhador por conta própria | TCP          |
++-----------------------------------------------+-------------------------------+--------------+
+| -   Empregado do setor público                | Empregado do setor público    | ESPub        |
+|                                               |                               |              |
+| -   Militar                                   |                               |              |
++-----------------------------------------------+-------------------------------+--------------+
+| -   Empregador                                | Empregador                    | EMP          |
++-----------------------------------------------+-------------------------------+--------------+
+
+```{r}
+
+data_2 <- data_1 |> 
+  mutate(V4012_ajust = 
+           case_when(
+                V4012 == "Conta própria"  ~ "TCP",
+                V4012 == "Empregado do setor privado" ~ "ESPriv",
+                V4012 == "Trabalhador doméstico" ~ "ESPriv",
+                V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
+                V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPub",  
+                V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+                V4012 == "Empregador" ~ "EMP"), 
+         .after = Ano) |> 
+  mutate(
+      ocupacao = 
+        case_when(
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas ocupadas" ~ 
+                                  as.character(V4012_ajust),
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas desocupadas" ~ "PFT",
+                VD4001 == "Pessoas fora da força de trabalho" ~ 
+                                  "PFT"), 
+      .after = V4012_ajust)
+
+data_2 |> 
+  distinct(id) |>
+  count()
+```
+
+Foram identificados 53.384 indivíduos. Pelo fato da ocupação trabalhador familiar não remunerado ser pouco frequente entre os indivíduos e para diminuir a complexidade da análise, optamos por removê-los do estudo. Também serão removidos aqueles que ainda não haviam completados 14 anos de idade na primeira entrevista e os que haviam atingido mais de 65 na última.
+
+```{r}
+
+
+tfnr <- data_2 |> 
+          filter(ocupacao == "TFNR") |> 
+  distinct(id)
+tfnr <- tfnr$id
+
+menor_idade <- data_2 |> 
+  filter(V1016 == 1 & V2009 < 15)
+menor_idade <- menor_idade$id
+
+maior_idade <- data_2 |> 
+  filter(V1016 == 5 & V2009 > 64)
+maior_idade <- maior_idade$id
+
+dados_tratados <- data_2 |> 
+            filter(!id %in% tfnr) |> 
+            filter(!id %in% menor_idade) |> 
+            filter(!id %in% maior_idade)
+```
+
+No próximo bloco, serão selecionadas as variáveis de interesse:
+
+-   id: identificação do indivíduo;
+
+-   V1016: número da entrevista (de 1 a 5)
+
+-   ocupação: categoria ocupacional.
+
+A partir da próxima subseção começamos a lidar com a análise de sequência propriamente dita.
+
+## 1.2. Codificação das narrativas ou processos em sequências
+
+Nesta etapa, os processos são codificados em sequências. Precisamos deixar os dados em um formato para rodar a análise de sequências.
+
+```{r}
+
+data_long <- 
+  dados_tratados |>
+  select(id, V1016,ocupacao)
+
+#Transformando a estrutura de dados para wide
+data_wide <- data_long |> 
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
+              values_fn = list)
+
+# Colocando as colunas em ordem de entrevista e para caracteres
+data_ordem <- data_wide|> 
+  relocate(id,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) 
+
+# id_seq foi criada apenas para ter mais uma coluna de identificação 
+
+data_filtro <- data_ordem  |> 
+  filter(if_all(2:6, ~ . != "NULL")) |>  
+  filter(rowSums(across(2:6, ~ . != "TCP")) < 5) |> 
+  mutate(id_seq = row_number())
+
+```
+
+### 1.2.1. Separando amostras aleatórias para alguns testes
+
+O conjunto de dados é muito amplo, o que tem inviabilizado, devido à limitações computacionais, rodar a técnica para toda a base. Para superar tal limitação, trabalhamos com uma amostra de 5000 observações extraídas aleatoriamente da base original. Esta limitação acaba abrindo uma possibilidade que é viabilizar avaliações de outras amostragens para validar se os tipos de sequências se mantém.
+
+Geraremos três amostras aleatórios de 6.000 observações para testar os diferentes métodos de clusterização. A primeira amostra será usada para "treinar" e a segunda e terceira amostras serão aplicadas para "testar".
+
+```{r}
+set.seed(123)
+
+num_amostras <- 3
+tamanho_amostra <- 6000
+
+lista_amostras <- data_filtro |> 
+  slice_sample(n = num_amostras*tamanho_amostra, replace = FALSE) |> 
+  mutate(grupo_amostra = rep(1:num_amostras, each = tamanho_amostra)) |> 
+  group_split(grupo_amostra, .keep = FALSE)
+
+amostra1 <- lista_amostras[[1]]
+amostra2 <- lista_amostras[[2]]
+amostra3 <- lista_amostras[[3]]
+```
+
+### 1.2.2. Análise exploratória de sequências
+
+Aqui observaremos algumas análises exploratórias sobre a sequência da amostra 1.
+
+```{r}
+#|warning: FALSE
+# Objeto de sequência
+
+rownames(amostra1) <- amostra1$id_seq
+
+
+seq <- seqdef(amostra1,
+              var = amostra1[,c(2:6)],
+              id = id_seq,
+                 alphabet = alfabeto,
+                 labels = rotulo,
+                 cnames = c("1", "2", "3", "4","5"))
+
+# este objeto abaixo serve para juntar às bases originais 
+
+base_join <- cbind(seq, 
+                   amostra1$id_seq, 
+                   amostra1$id) |> 
+              rename(id_seq_original = `amostra1$id_seq`,
+                     id = `amostra1$id`) |> 
+              mutate(id_pos_seq = row_number())
+```
+
+As 6000 observações se tornaram 528 sequências.
+
+```{r}
+seqtab(seq, idx=0) |> 
+  nrow()
+```
+
+Pelo gráfico de estado abaixo, observa-se a prevalência de TCP em todos os períodos.
+
+```{r}
+# Gráfico de estado
+seqdplot(seq, 
+         xtlab=1:5, 
+         cex.legend=0.9, 
+         main = "Gráfico de estados",
+         with.legend = "right")
+```
+
+O gráfico de índices mostra as 5000 sequências. Todavia, a visualização é prejudicada devido ao número de observações.
+
+```{r}
+# Gráfico de índices
+seqIplot(seq, 
+         main = "Gráficos de índices", 
+         with.legend = "right")
+```
+
+Para superar tal limitação, separamos as 10 sequências mais prevalentes.
+
+```{r}
+# As dez mais frequentes
+
+seqfplot(seq, 
+         main="Dez mais frequentes", 
+         with.legend = "right")
+
+```
+
+A matriz de transição, apresentada abaixo, mostra a frequência de transição de um estado a outro, do momento t~0~ ao momento t~1~.
+
+Observação, com base no eixo diagonal, que geralmente quem está uma categoria tende a permanecer na mesma categoria no momento posterior. Este fato é sobretudo válido para o TCP.
+
+```{r}
+ggseqtrplot(seq, 
+            dss = FALSE) +
+  ggtitle("Gráfico de transição")
+```
+
+## 1.3. Mensuração das dissimilaridades de par a par de indivíduos
+
+Para gerar agrupamentos, primeiramente definiremos a matriz de dissimilaridades através da função seqdist, usando método Optimal Matching (OM).
+
+```{r}
+#|warning: false
+
+# Definindo a matriz de dissimilaridades
+
+couts <- seqsubm(seq, 
+                 method="CONSTANT", 
+                 cval=2)
+
+dissim <- seqdist(seq, 
+                  method="OM", 
+                  sm=couts, 
+                  indel=1.5,
+                  full.matrix = TRUE)
+```
+
+## 1.4. Aplicação de técnica de redução de dimensionalidade para agrupar sequências similares
+
+O próximo passo consiste na aplicação da técnica de clusterização. Existem diversas técnicas e procedimentos que podem ser usados. Para nosso caso, aplicamos uma clusterização pelo método de k-means.
+
+Antes de iniciar a clusterização, aplicamos a técnica de principal components analysis para reduzir o número de atributos em apenas duas dimensões. Isso é útil para visualizar os clusters, depois de formados, em duas dimensões.
+
+É possível fazer a clusterização sem a PCA? Sim, aplicamos e o resultado não foi muito diferente. Então vamos manter a PCA, especialmente por facilitar a visualização em duas dimensões e por aprimorar o desempenho do processamento da clusterização.
+
+```{r}
+# aplicando PCA
+mds <- cmdscale(dissim, k=2)  # Redução para 2 dimensões
+
+mds_df_kmeans <- as.data.frame(mds)
+
+colnames(mds_df_kmeans) <- c("Dim1", 
+                             "Dim2")
+```
+
+Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria 3 clusters.
+
+```{r}
+fviz_nbclust(mds_df_kmeans, 
+             kmeans, 
+             method = "wss")
+```
+
+### 1.4.1. Testando com três clusters
+
+Agora vamos testar a clusterização dividindo a amostra em três grupos.
+
+```{r}
+
+set.seed(123) 
+mds_df_kmeans$sequencia_id <- 1:nrow(mds_df_kmeans)
+
+
+kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], 
+                        centers=3) 
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
+
+
+ggplot(mds_df_kmeans, aes(x=Dim1, 
+                          y=Dim2, 
+                          color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), 
+             vjust=-1, 
+             hjust=0.5, 
+             size=3) +  
+  labs(title="Gráfico de Dispersão com 3 Clusters", 
+       x="Dimensão 1", 
+       y="Dimensão 2") +
+  theme_minimal()
+
+```
+
+```{r}
+seqIplot(seq, 
+        group = kmeans_result$cluster,
+        border = NA, 
+        sortv = dissim)
+```
+
+### 1.4.3. Juntando base original aos clusters
+
+```{r}
+relacao_cluster <- kmeans_result[["cluster"]]
+
+relacao_cluster <- cbind(base_join, relacao_cluster)
+
+id_unico <- 
+  dados_tratados |> 
+  distinct(id, 
+           .keep_all = TRUE)
+
+
+sexo <- relacao_cluster |> 
+  left_join(id_unico, by = "id") |> 
+  mutate(relacao_cluster = 
+           case_when(
+                relacao_cluster == '1' ~ 'Precarizado', 
+                relacao_cluster == '2' ~ 'Persistente',
+                relacao_cluster == '3' ~ 'Transitório')) |> 
+  group_by(relacao_cluster, V2007) |> 
+  count() |> 
+  group_by(relacao_cluster) |> 
+  mutate(percentual = n / sum(n) * 100)
+  
+```
