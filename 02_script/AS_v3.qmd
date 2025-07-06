@@ -49,7 +49,7 @@ A seguir é selecionada as variáveis que serão importantes para análises e de
 #| warning: false
 #| paged-print: false
 
-data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024.csv")
+data_0 <- read_csv("C:/Users/HP I3/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024.csv")
 
 data_1 <- data_0 |>   
         select(id, Ano, Trimestre, UF, 
@@ -98,7 +98,7 @@ data_2 <- data_1 |>
                 V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
                 V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ "ESPub",  
                 V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
-                V4012 == "Empregador" ~ "EMP"), 
+                V4012 == "Empregador" ~ "TCP"), 
          .after = Ano) |> 
   mutate(
       ocupacao = 
@@ -127,6 +127,11 @@ tfnr <- data_2 |>
   distinct(id)
 tfnr <- tfnr$id
 
+espub <- data_2 |> 
+          filter(ocupacao == "ESPub") |> 
+  distinct(id)
+espub <- espub$id
+
 menor_idade <- data_2 |> 
   filter(V1016 == 1 & V2009 < 15)
 menor_idade <- menor_idade$id
@@ -137,6 +142,7 @@ maior_idade <- maior_idade$id
 
 dados_tratados <- data_2 |> 
             filter(!id %in% tfnr) |> 
+            filter(!id %in% espub) |> 
             filter(!id %in% menor_idade) |> 
             filter(!id %in% maior_idade)
 ```
@@ -191,7 +197,7 @@ Geraremos três amostras aleatórios de 6.000 observações para testar os difer
 set.seed(123)
 
 num_amostras <- 3
-tamanho_amostra <- 6000
+tamanho_amostra <- 5000
 
 lista_amostras <- data_filtro |> 
   slice_sample(n = num_amostras*tamanho_amostra, replace = FALSE) |> 
@@ -213,13 +219,28 @@ Aqui observaremos algumas análises exploratórias sobre a sequência da amostra
 
 rownames(amostra1) <- amostra1$id_seq
 
+#cores_personalizadas <- c(
+#  "EMP"    = "#1F78B4",
+#  "ESPriv" = "#FDBF00",
+#  "ESPub"  = "#A65628", 
+#  "PFT"    = "#E34A33",
+#  "TCP"    = "#33A02C"
+#)
+
+cores_personalizadas <- c(
+  "ESPriv" = "#FDBF00",
+  "PFT"    = "#E34A33",
+  "TCP"    = "#33A02C"
+)
+
+
+
 
 seq <- seqdef(amostra1,
-              var = amostra1[,c(2:6)],
-              id = id_seq,
-                 alphabet = alfabeto,
-                 labels = rotulo,
-                 cnames = c("1", "2", "3", "4","5"))
+              var = 2:6,
+              id = amostra1[[7]],
+              cnames = c("1", "2", "3", "4","5"),
+              cpal = cores_personalizadas)
 
 # este objeto abaixo serve para juntar às bases originais 
 
@@ -231,7 +252,7 @@ base_join <- cbind(seq,
               mutate(id_pos_seq = row_number())
 ```
 
-As 6000 observações se tornaram 528 sequências.
+As 6000 observações se tornaram 362 sequências.
 
 ```{r}
 seqtab(seq, idx=0) |> 
@@ -362,31 +383,19 @@ seqIplot(seq,
         group = kmeans_result$cluster,
         border = NA, 
         sortv = dissim)
+
 ```
 
 ### 1.4.3. Juntando base original aos clusters
 
 ```{r}
-relacao_cluster <- kmeans_result[["cluster"]]
 
-relacao_cluster <- cbind(base_join, relacao_cluster)
-
-id_unico <- 
-  dados_tratados |> 
-  distinct(id, 
-           .keep_all = TRUE)
-
-
-sexo <- relacao_cluster |> 
-  left_join(id_unico, by = "id") |> 
-  mutate(relacao_cluster = 
-           case_when(
-                relacao_cluster == '1' ~ 'Precarizado', 
-                relacao_cluster == '2' ~ 'Persistente',
-                relacao_cluster == '3' ~ 'Transitório')) |> 
-  group_by(relacao_cluster, V2007) |> 
-  count() |> 
-  group_by(relacao_cluster) |> 
-  mutate(percentual = n / sum(n) * 100)
+base_join <- cbind(seq, 
+                   amostra1$id_seq, 
+                   amostra1$id,
+                   mds_df_kmeans$cluster) %>%
+  rename(id_sequenciamento = `amostra1$id_seq`,
+         id = `amostra1$id`,
+         cluster = `mds_df_kmeans$cluster`) 
   
 ```
