@@ -111,7 +111,7 @@ qtd_pessoas <- pnadc |>
   ungroup()
 
 data_1 <- pnadc_final |> 
-  left_join(qtd_pessoas, by = "cod_dom")
+  left_join(qtd_pessoas, by = c("cod_dom" = "cod_dom", "V1016" = "V1016"))
 
 renda_media <- pnadc |> 
   mutate(renda = if_else(is.na(VD4016),0, VD4016)) |> 
@@ -144,4 +144,4 @@ data_3 <- data_2 |>
          filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
 
 #Salvando
-write.csv(pnadc_final,"as_2023_2024.csv")
+write.csv(data_1,"as_2023_2024_v2.csv")
