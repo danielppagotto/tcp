@@ -425,7 +425,9 @@ dados_cluster <- dados_tratados |>
 
 ## 1.5. Análise descritiva dos clusters.
 
-### 1.5.1.1. UF
+A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pesos populacionais nas análises descritivas e inferenciais. A variável que representa isso é V1028, que calibra pelas projeções populacionais. Essa variável indica quantas pessoas existem com as mesmas características daquela amostra/indivíduo. As função da biblioteca `survey`, são indicadas para incoporar os referidos pesos nas análises pretendidas. No entanto, também é possível realizar isso de forma mais rudimentar, usando as funções do `tidyverse`, usando V1028 como peso. Para fins didáticos e para futuras consultas, testaremos ambas as técnicas.
+
+### 1.5.1. UF
 
 ```{r}
 
@@ -440,7 +442,27 @@ uf <- dados_cluster |>
     
 ```
 
-### 1.5.1.2. Região
+```{r}
+
+data_teste <- dados_cluster |>
+  mutate(Persistente = as.numeric(cluster == "Persistente"),
+         Precarizado = as.numeric(cluster == "Precarizado"),
+         Transitório = as.numeric(cluster == "Transitório"))
+
+design <- svydesign(ids = ~1, weights = ~V1028, data = data_teste)
+
+proporcoes <- svyby(~Persistente + Precarizado + Transitório, ~UF, design, svymean)
+
+# Renomear e reestruturar
+proporcoes <- proporcoes |>
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |>
+  select(UF, perc_Persistente, perc_Precarizado, perc_Transitório)
+```
+
+### 1.5.2. Região
 
 ```{r}
 regiao <- dados_cluster |>
@@ -452,7 +474,7 @@ regiao <- dados_cluster |>
          perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 ```
 
-### 1.5.1.3. Situação do domicílio
+### 1.5.3. Situação do domicílio
 
 ```{r}
 urbanidade <- dados_cluster |> 
@@ -464,7 +486,7 @@ urbanidade <- dados_cluster |>
          perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 ```
 
-### 1.5.1.4. Quantidade de pessoas no domicílio
+### 1.5.4. Quantidade de pessoas no domicílio
 
 ```{r}
 qtd_pessoas <- dados_cluster %>%
@@ -478,7 +500,7 @@ qtd_pessoas <- dados_cluster %>%
     )))
 ```
 
-### 1.5.1.5. Posicão familiar
+### 1.5.5. Posicão familiar
 
 ```{r}
 chefe_familia <- dados_cluster |> 
@@ -500,7 +522,7 @@ chefe_familia_2 <- dados_cluster |>
   
 ```
 
-### 1.5.1.6. Gênero
+### 1.5.6. Gênero
 
 ```{r}
 genero <- dados_cluster |> 
@@ -512,7 +534,7 @@ genero <- dados_cluster |>
          perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 ```
 
-### 1.5.1.5. Idade
+### 1.5.5. Idade
 
 ```{r}
 idade <- dados_cluster %>%
@@ -526,7 +548,7 @@ idade <- dados_cluster %>%
     )))
 ```
 
-### 1.5.1.7. Escolaridade
+### 1.5.7. Escolaridade
 
 ```{r}
 escolaridade <- dados_cluster |> 
@@ -538,7 +560,7 @@ escolaridade <- dados_cluster |>
          perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 ```
 
-### 1.5.1.8. Cor ou raça
+### 1.5.8. Cor ou raça
 
 ```{r}
 raca <- dados_cluster |> 
@@ -550,7 +572,7 @@ raca <- dados_cluster |>
          perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 ```
 
-### 1.5.1.9. Atividade profissional
+### 1.5.9. Atividade profissional
 
 ```{r}
 atividade <- dados_tratados |> 
@@ -573,7 +595,7 @@ atividade_2 <- dados_tratados |>
   pivot_wider(names_from = cluster, values_from = n)
 ```
 
-### 1.5.1.10. Renda média
+### 1.5.10. Renda média
 
 ```{r}
 renda <- dados_tratados |> 
@@ -592,7 +614,7 @@ renda <- dados_tratados |>
     )))
 ```
 
-#### 1.5.1.10.1. Renda média por região
+#### 1.5.10.1. Renda média por região
 
 ```{r}
 renda_regiao <- dados_cluster |> 
