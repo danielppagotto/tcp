@@ -431,13 +431,14 @@ A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pes
 
 ```{r}
 
-uf <- dados_cluster |> 
-  group_by(UF, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+uf_2 <- dados_cluster |> 
+  count(UF, cluster, wt = V1028) |> 
+  pivot_wider(names_from = cluster, values_from = n) |> 
+  mutate(
+    perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
+    perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
+    perc_Transitório = Transitório / (Persistente + Precarizado + Transitório)
+  )
     
     
 ```
@@ -460,6 +461,7 @@ proporcoes <- proporcoes |>
          perc_Precarizado = Precarizado / total,
          perc_Transitório = Transitório / total) |>
   select(UF, perc_Persistente, perc_Precarizado, perc_Transitório)
+
 ```
 
 ### 1.5.2. Região
