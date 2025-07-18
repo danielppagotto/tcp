@@ -40,6 +40,7 @@ library(stringr)
 library(ggseqplot)
 library(factoextra)
 library(readxl)
+library(survey)
 ```
 
 A seguir é selecionada as variáveis que serão importantes para análises e definida a variável *Trimestre_Ano*.
@@ -420,7 +421,10 @@ dados_cluster <- dados_tratados |>
     UF %in% c("Paraná", "Santa Catarina", "Rio Grande do Sul") ~ "Sul",
     UF %in% c("Mato Grosso do Sul", "Mato Grosso", "Goiás", "Distrito Federal") ~ "Centro-Oeste",
     TRUE ~ NA_character_
-  ))
+  )) |> 
+  mutate(Persistente = as.numeric(cluster == "Persistente"),
+         Precarizado = as.numeric(cluster == "Precarizado"),
+         Transitório = as.numeric(cluster == "Transitório"))
 ```
 
 ## 1.5. Análise descritiva dos clusters.
@@ -431,7 +435,7 @@ A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pes
 
 ```{r}
 
-uf_2 <- dados_cluster |> 
+uf <- dados_cluster |> 
   count(UF, cluster, wt = V1028) |> 
   pivot_wider(names_from = cluster, values_from = n) |> 
   mutate(
@@ -445,17 +449,9 @@ uf_2 <- dados_cluster |>
 
 ```{r}
 
-data_teste <- dados_cluster |>
-  mutate(Persistente = as.numeric(cluster == "Persistente"),
-         Precarizado = as.numeric(cluster == "Precarizado"),
-         Transitório = as.numeric(cluster == "Transitório"))
+design <- svydesign(ids = ~UPA, weights = ~V1028, data = dados_cluster)
 
-design <- svydesign(ids = ~1, weights = ~V1028, data = data_teste)
-
-proporcoes <- svyby(~Persistente + Precarizado + Transitório, ~UF, design, svymean)
-
-# Renomear e reestruturar
-proporcoes <- proporcoes |>
+uf_2 <- svyby(~Persistente + Precarizado + Transitório, ~UF, design, svymean) |> 
   mutate(total = Persistente + Precarizado + Transitório,
          perc_Persistente = Persistente / total,
          perc_Precarizado = Precarizado / total,
@@ -467,39 +463,32 @@ proporcoes <- proporcoes |>
 ### 1.5.2. Região
 
 ```{r}
-regiao <- dados_cluster |>
-  group_by(regiao, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+regiao <- svyby(~Persistente + Precarizado + Transitório, ~regiao, design, svymean) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |>
+  select(regiao, perc_Persistente, perc_Precarizado, perc_Transitório)
+
+
 ```
 
 ### 1.5.3. Situação do domicílio
 
 ```{r}
-urbanidade <- dados_cluster |> 
-  group_by(V1022, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
+urbanidade <- svyby(~Persistente + Precarizado + Transitório, ~V1022, design, svymean) |> 
   mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
          perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório)) |> 
+  select(V1022, perc_Persistente, perc_Precarizado, perc_Transitório)
 ```
 
 ### 1.5.4. Quantidade de pessoas no domicílio
 
 ```{r}
-qtd_pessoas <- dados_cluster %>%
-    group_by(cluster) |> 
-    summarise(across(pessoas_domicilio, list(
-      media = ~mean(.x, na.rm = TRUE),
-      desvio = ~sd(.x, na.rm = TRUE),
-      mediana = ~median(.x, na.rm = TRUE),
-      minimo = ~min(.x, na.rm = TRUE),
-      maximo = ~max(.x, na.rm = TRUE)
-    )))
+
+qtd_pessoas <- svyby(~pessoas_domicilio, ~cluster, design, svymean, na.rm = TRUE)
+
 ```
 
 ### 1.5.5. Posicão familiar
