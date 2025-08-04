@@ -67,7 +67,7 @@ data_1 <- data_0 |>
                            .before = UF)
 ```
 
-O objeto de análise é a categoria de ocupação (V4012). Para isso serão necessárias algumas adaptações. A primeira é reduzir o número de categorias considerando a natureza delas e para fins de simplificação de análise. A tabela abaixo sintetiza as transformações realizadas.
+O objeto de análise é a categoria de ocupação (V4012). Para isso serão necessárias algumas adaptações. A primeira é reduzir o número de categorias considerando a natureza delas e com fins de simplificação de análise. A tabela abaixo sintetiza as transformações realizadas.
 
 +-----------------------------------------------+-------------------------------+--------------+
 | Antes do tratamento                           | Após o tratamento             | Abreviação   |
@@ -119,7 +119,7 @@ data_2 |>
   count()
 ```
 
-Foram identificados 53.384 indivíduos. Pelo fato da ocupação trabalhador familiar não remunerado ser pouco frequente entre os indivíduos e para diminuir a complexidade da análise, optamos por removê-los do estudo. Também serão removidos aqueles que ainda não haviam completados 14 anos de idade na primeira entrevista e os que haviam atingido mais de 65 na última.
+Foram identificados 53.384 indivíduos. Pelo fato da ocupação trabalhador familiar não remunerado ser pouco frequente entre os indivíduos e para diminuir a complexidade da análise, optamos por removê-los do estudo, além de empregados do setor público. Também serão removidos aqueles que ainda não haviam completados 14 anos de idade na primeira entrevista e os que haviam atingido mais de 65 na última.
 
 ```{r}
 
@@ -147,6 +147,10 @@ dados_tratados <- data_2 |>
             filter(!id %in% espub) |> 
             filter(!id %in% menor_idade) |> 
             filter(!id %in% maior_idade)
+
+dados_tratados |> 
+  distinct(id) |>
+  count()
 ```
 
 No próximo bloco, serão selecionadas as variáveis de interesse:
@@ -256,7 +260,7 @@ base_join <- cbind(seq,
               mutate(id_pos_seq = row_number())
 ```
 
-As 6000 observações se tornaram 362 sequências.
+As 6000 observações se tornaram 376 sequências.
 
 ```{r}
 seqtab(seq, idx=0) |> 
@@ -274,7 +278,7 @@ seqdplot(seq,
          with.legend = "right")
 ```
 
-O gráfico de índices mostra as 5000 sequências. Todavia, a visualização é prejudicada devido ao número de observações.
+O gráfico de índices mostra as 6.000 sequências. Todavia, a visualização é prejudicada devido ao número de observações.
 
 ```{r}
 # Gráfico de índices
@@ -409,6 +413,12 @@ base_cluster <- cbind(seq,
 id_cluster <- base_cluster |> 
   distinct(id, cluster)
 
+renda <- dados_tratados |> 
+  filter(id %in% id_cluster$id) |> 
+  filter(ocupacao == "TCP") |> 
+  group_by(id) |> 
+  summarise(renda_media = mean(VD4016))
+
 dados_cluster <- dados_tratados |> 
   filter(id %in% id_cluster$id) |> 
   left_join(id_cluster, by = "id") |> 
@@ -424,12 +434,15 @@ dados_cluster <- dados_tratados |>
   )) |> 
   mutate(Persistente = as.numeric(cluster == "Persistente"),
          Precarizado = as.numeric(cluster == "Precarizado"),
-         Transitório = as.numeric(cluster == "Transitório"))
+         Transitório = as.numeric(cluster == "Transitório")) |> 
+  mutate(chefe_domicilio = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
+  mutate(VD4010 = if_else(is.na(VD4010), "Desocupado", VD4010)) |> 
+  left_join(renda, by = "id")
 ```
 
 ## 1.5. Análise descritiva dos clusters.
 
-A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pesos populacionais nas análises descritivas e inferenciais. A variável que representa isso é V1028, que calibra pelas projeções populacionais. Essa variável indica quantas pessoas existem com as mesmas características daquela amostra/indivíduo. As função da biblioteca `survey`, são indicadas para incoporar os referidos pesos nas análises pretendidas. No entanto, também é possível realizar isso de forma mais rudimentar, usando as funções do `tidyverse`, usando V1028 como peso. Para fins didáticos e para futuras consultas, testaremos ambas as técnicas.
+A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pesos populacionais nas análises descritivas e inferenciais, no qual é representada pela variável V1028, que calibra pelas projeções populacionais. Essa variável indica quantas pessoas existem com as mesmas características daquela amostra/indivíduo. As função da biblioteca `survey`, são indicadas para incoporar os referidos pesos nas análises pretendidas. No entanto, também é possível realizar isso de forma mais rudimentar, usando as funções do `tidyverse`, tendo V1028 como peso. Para fins didáticos e para futuras consultas, testaremos ambas as técnicas.
 
 ### 1.5.1. UF
 
@@ -477,9 +490,10 @@ regiao <- svyby(~Persistente + Precarizado + Transitório, ~regiao, design, svym
 
 ```{r}
 urbanidade <- svyby(~Persistente + Precarizado + Transitório, ~V1022, design, svymean) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório)) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |> 
   select(V1022, perc_Persistente, perc_Precarizado, perc_Transitório)
 ```
 
@@ -494,115 +508,72 @@ qtd_pessoas <- svyby(~pessoas_domicilio, ~cluster, design, svymean, na.rm = TRUE
 ### 1.5.5. Posicão familiar
 
 ```{r}
-chefe_familia <- dados_cluster |> 
-  mutate(chefe_domicilio = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
-  group_by(chefe_domicilio, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 
-chefe_familia_2 <- dados_cluster |> 
-  mutate(chefe_domicilio = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
-  group_by(chefe_domicilio, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = chefe_domicilio, values_from = total) |> 
-  mutate(perc_chefe = `Responsável pelo domicílio` / (`Responsável pelo domicílio` + `Não responsável pelo domicílio`),
-         perc_NaoChefe = `Não responsável pelo domicílio` / (`Responsável pelo domicílio` + `Não responsável pelo domicílio`))
+chefe_familia <- svyby(~Persistente + Precarizado + Transitório, ~chefe_domicilio, design, svymean) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |> 
+  select(chefe_domicilio, perc_Persistente, perc_Precarizado, perc_Transitório)
   
 ```
 
 ### 1.5.6. Gênero
 
 ```{r}
-genero <- dados_cluster |> 
-  group_by(V2007, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+genero <- svyby(~Persistente + Precarizado + Transitório, ~V2007, design, svymean) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |> 
+  select(V2007, perc_Persistente, perc_Precarizado, perc_Transitório)
 ```
 
 ### 1.5.5. Idade
 
 ```{r}
-idade <- dados_cluster %>%
-    group_by(cluster) |> 
-    summarise(across(V2009, list(
-      media = ~mean(.x, na.rm = TRUE),
-      desvio = ~sd(.x, na.rm = TRUE),
-      mediana = ~median(.x, na.rm = TRUE),
-      minimo = ~min(.x, na.rm = TRUE),
-      maximo = ~max(.x, na.rm = TRUE)
-    )))
+
+idade <- svyby(~V2009, ~cluster, design, svymean, na.rm = TRUE)
+
 ```
 
 ### 1.5.7. Escolaridade
 
 ```{r}
-escolaridade <- dados_cluster |> 
-  group_by(VD3004, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+escolaridade <- svyby(~Persistente + Precarizado + Transitório, ~VD3004, design, svymean) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |> 
+  select(VD3004, perc_Persistente, perc_Precarizado, perc_Transitório)
 ```
 
 ### 1.5.8. Cor ou raça
 
 ```{r}
-raca <- dados_cluster |> 
-  group_by(V2010, cluster) |> 
-  summarise(total = sum(V1028), .groups = "drop") |>
-  pivot_wider(names_from = cluster, values_from = total) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
+raca <- svyby(~Persistente + Precarizado + Transitório, ~V2010, design, svymean) |> 
+  mutate(total = Persistente + Precarizado + Transitório,
+         perc_Persistente = Persistente / total,
+         perc_Precarizado = Precarizado / total,
+         perc_Transitório = Transitório / total) |> 
+  select(V2010, perc_Persistente, perc_Precarizado, perc_Transitório)
 ```
 
 ### 1.5.9. Atividade profissional
 
 ```{r}
-atividade <- dados_tratados |> 
-  filter(id %in% id_cluster$id) |> 
-  left_join(id_cluster, by = "id") |> 
-  group_by(cluster, VD4010) |> 
-  count() |> 
-  mutate(VD4010 = if_else(is.na(VD4010), "Desocupado", VD4010)) |> 
-  pivot_wider(names_from = cluster, values_from = n) |> 
-  mutate(perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
-         perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
-         perc_Transitório = Transitório / (Persistente + Precarizado + Transitório))
 
-atividade_2 <- dados_tratados |> 
-  filter(id %in% id_cluster$id) |> 
-  left_join(id_cluster, by = "id") |> 
-  group_by(cluster, VD4010) |> 
-  count() |> 
-  mutate(VD4010 = if_else(is.na(VD4010), "Desocupado", VD4010)) |> 
-  pivot_wider(names_from = cluster, values_from = n)
+atividade_1 <- svyby(~Persistente + Precarizado + Transitório, ~VD4010, design, svymean) |> 
+  select(VD4010, Persistente, Precarizado, Transitório)
+
+atividade_2 <- svyby(~VD4010,~cluster, design, svymean)
 ```
 
 ### 1.5.10. Renda média
 
 ```{r}
-renda <- dados_tratados |> 
-  filter(id %in% id_cluster$id) |> 
-  left_join(id_cluster, by = "id") |> 
-  filter(ocupacao == "TCP") |> 
-  group_by(id, cluster) |> 
-  summarise(renda_media = mean(VD4016)) |> 
-  group_by(cluster) |> 
-    summarise(across(renda_media, list(
-      media = ~mean(.x, na.rm = TRUE),
-      desvio = ~sd(.x, na.rm = TRUE),
-      mediana = ~median(.x, na.rm = TRUE),
-      minimo = ~min(.x, na.rm = TRUE),
-      maximo = ~max(.x, na.rm = TRUE)
-    )))
+
+renda_media <- svyby(~renda_media, ~cluster, design, svymean, na.rm = TRUE)
 ```
 
 #### 1.5.10.1. Renda média por região
@@ -621,4 +592,7 @@ renda_regiao <- dados_cluster |>
       minimo = ~min(.x, na.rm = TRUE),
       maximo = ~max(.x, na.rm = TRUE)
     )))
+
+
+renda_regiao <- svyby(~renda_media, ~cluster + regiao, design, svymean, na.rm = TRUE)
 ```
