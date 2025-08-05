@@ -8,9 +8,10 @@ library(tidyverse)
 # Definindo função --------------------------------------------------------
 
 base_pnad <- function(ano, trimestre){
-  pnadc_04_2017 <- get_pnadc(ano, trimestre)
-  pnadc_04_2017srv <- as_survey(pnadc_04_2017)
-  data_04_2017 <- as.data.frame(pnadc_04_2017srv) |> 
+  pnadc <- get_pnadc(ano, trimestre)
+  pnadc <- transform(pnadc, VD4016_ajust = VD4016 * Habitual)
+  pnadc_srv <- as_survey(pnadc)
+  data <- as.data.frame(pnadc_srv) |> 
     select(Ano, Trimestre, UF, Capital, RM_RIDE, 
            UPA, Estrato, V1008, V1014, V1016, V1022,
            V1023, V1027, V1028, V2001, V2003, V2007,
@@ -24,7 +25,7 @@ base_pnad <- function(ano, trimestre){
            VD3005, VD4010, VD4011, V4058, V4062, V4062C, 
            VD3004, VD3005, VD4010, VD4011, VD4019, VD4015,
            VD4016, VD4017, VD4019, VD4020, VD2002, V2005,
-           V4076, V40761, V40762, V40763, V1028
+           V4076, V40761, V40762, V40763, V1028, VD4016_ajust
 )
 }
 
@@ -114,7 +115,7 @@ data_1 <- pnadc_final |>
   left_join(qtd_pessoas, by = c("cod_dom" = "cod_dom", "V1016" = "V1016"))
 
 renda_media <- pnadc |> 
-  mutate(renda = if_else(is.na(VD4016),0, VD4016)) |> 
+  mutate(renda = if_else(is.na(VD4016_ajust),0, VD4016_ajust)) |> 
   mutate(cod_dom = paste(UPA, V1008, V1014, sep = "-")) |> 
   filter(cod_dom %in% codigos_domicilio) |> 
   group_by(cod_dom, V1016) |> 
@@ -144,4 +145,4 @@ data_3 <- data_2 |>
          filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
 
 #Salvando
-write.csv(data_1,"as_2023_2024_v2.csv")
+write.csv(data_3,"as_2023_2024_v3.csv")
