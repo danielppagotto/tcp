@@ -41,6 +41,8 @@ library(ggseqplot)
 library(factoextra)
 library(readxl)
 library(survey)
+library(cluster)
+library(NbClust)
 ```
 
 A seguir é selecionada as variáveis que serão importantes para análises e definida a variável *Trimestre_Ano*.
@@ -50,7 +52,7 @@ A seguir é selecionada as variáveis que serão importantes para análises e de
 #| warning: false
 #| paged-print: false
 
-data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024_v2.csv") |> 
+data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024_v3.csv") |> 
   rename(pessoas_domicilio = n)
 
 data_1 <- data_0 |>   
@@ -61,7 +63,8 @@ data_1 <- data_0 |>
                V20082, V2009,
                VD4001,VD4002, VD3004, V4039,
                VD4010, V4032, V4019, V2010,
-               V2005, VD4016, V1028, pessoas_domicilio) |>  
+               V2005, VD4016, V1028, pessoas_domicilio,
+               VD4016_ajust) |>  
   mutate(Trimestre_Ano = paste(Trimestre, 
                            Ano, sep = "-"), 
                            .before = UF)
@@ -134,6 +137,11 @@ espub <- data_2 |>
   distinct(id)
 espub <- espub$id
 
+emp <- data_2 |> 
+          filter(ocupacao == "EMP") |> 
+  distinct(id)
+emp <- emp$id
+
 menor_idade <- data_2 |> 
   filter(V1016 == 1 & V2009 < 15)
 menor_idade <- menor_idade$id
@@ -146,7 +154,8 @@ dados_tratados <- data_2 |>
             filter(!id %in% tfnr) |> 
             filter(!id %in% espub) |> 
             filter(!id %in% menor_idade) |> 
-            filter(!id %in% maior_idade)
+            filter(!id %in% maior_idade) |> 
+            filter(!id %in% emp)
 
 dados_tratados |> 
   distinct(id) |>
@@ -234,7 +243,6 @@ rownames(amostra1) <- amostra1$id_seq
 #)
 
 cores_personalizadas <- c(
-  "EMP"    = "#1F78B4",
   "ESPriv" = "#FDBF00",
   "PFT"    = "#E34A33",
   "TCP"    = "#33A02C"
@@ -246,7 +254,7 @@ cores_personalizadas <- c(
 seq <- seqdef(amostra1,
               var = 2:6,
               id = amostra1[[7]],
-              cnames = c("1", "2", "3", "4","5"),
+              cnames = c("1", "2", "3", "4", "5"),
               cpal = cores_personalizadas
               )
 
@@ -352,6 +360,12 @@ Não existe clareza sobre o melhor número de clusters. De acordo com o elbow pl
 fviz_nbclust(mds_df_kmeans, 
              kmeans, 
              method = "wss")
+
+nc <- NbClust(mds_df_kmeans, 
+              min.nc = 2, 
+              max.nc = 10, 
+              method = "kmeans", 
+              index = "alllong")
 ```
 
 ### 1.4.1. Testando com três clusters
@@ -406,9 +420,9 @@ base_cluster <- cbind(seq,
          id = `amostra1$id`,
          cluster = `mds_df_kmeans$cluster`)  |> 
   mutate(cluster = as.character(cluster),
-         cluster = case_when(cluster == "1" ~ "Precarizado",
-                              cluster == "2" ~ "Transitório",
-                              cluster == "3" ~ "Persistente"))
+         cluster = case_when(cluster == "1" ~ "Persistente",
+                              cluster == "2" ~ "Precarizado",
+                              cluster == "3" ~ "Transitório"))
   
 id_cluster <- base_cluster |> 
   distinct(id, cluster)
@@ -417,7 +431,7 @@ renda <- dados_tratados |>
   filter(id %in% id_cluster$id) |> 
   filter(ocupacao == "TCP") |> 
   group_by(id) |> 
-  summarise(renda_media = mean(VD4016))
+  summarise(renda_media = mean(VD4016_ajust))
 
 dados_cluster <- dados_tratados |> 
   filter(id %in% id_cluster$id) |> 
@@ -437,6 +451,7 @@ dados_cluster <- dados_tratados |>
          Transitório = as.numeric(cluster == "Transitório")) |> 
   mutate(chefe_domicilio = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
   mutate(VD4010 = if_else(is.na(VD4010), "Desocupado", VD4010)) |> 
+  mutate(ensino_superior = if_else(VD3004 == "Superior completo", "Superior completo", "Sem superior completo")) |> 
   left_join(renda, by = "id")
 ```
 
@@ -489,7 +504,7 @@ regiao <- svyby(~Persistente + Precarizado + Transitório, ~regiao, design, svym
 ### 1.5.3. Situação do domicílio
 
 ```{r}
-urbanidade <- svyby(~Persistente + Precarizado + Transitório, ~V1022, design, svymean) |> 
+urbanidade <- svyby(~V1022, ~cluster, design, svymean) |> 
   mutate(total = Persistente + Precarizado + Transitório,
          perc_Persistente = Persistente / total,
          perc_Precarizado = Precarizado / total,
@@ -509,7 +524,7 @@ qtd_pessoas <- svyby(~pessoas_domicilio, ~cluster, design, svymean, na.rm = TRUE
 
 ```{r}
 
-chefe_familia <- svyby(~Persistente + Precarizado + Transitório, ~chefe_domicilio, design, svymean) |> 
+chefe_familia <- svyby(~chefe_domicilio, ~cluster, design, svymean) |> 
   mutate(total = Persistente + Precarizado + Transitório,
          perc_Persistente = Persistente / total,
          perc_Precarizado = Precarizado / total,
@@ -521,7 +536,7 @@ chefe_familia <- svyby(~Persistente + Precarizado + Transitório, ~chefe_domicil
 ### 1.5.6. Gênero
 
 ```{r}
-genero <- svyby(~Persistente + Precarizado + Transitório, ~V2007, design, svymean) |> 
+genero <- svyby(~V2007, ~cluster, design, svymean) |> 
   mutate(total = Persistente + Precarizado + Transitório,
          perc_Persistente = Persistente / total,
          perc_Precarizado = Precarizado / total,
@@ -540,7 +555,7 @@ idade <- svyby(~V2009, ~cluster, design, svymean, na.rm = TRUE)
 ### 1.5.7. Escolaridade
 
 ```{r}
-escolaridade <- svyby(~Persistente + Precarizado + Transitório, ~VD3004, design, svymean) |> 
+escolaridade <- svyby(~ensino_superior, ~cluster, design, svymean) |>
   mutate(total = Persistente + Precarizado + Transitório,
          perc_Persistente = Persistente / total,
          perc_Precarizado = Precarizado / total,
