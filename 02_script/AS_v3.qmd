@@ -361,11 +361,11 @@ fviz_nbclust(mds_df_kmeans,
              kmeans, 
              method = "wss")
 
-nc <- NbClust(mds_df_kmeans, 
-              min.nc = 2, 
-              max.nc = 10, 
-              method = "kmeans", 
-              index = "alllong")
+#nc <- NbClust(mds_df_kmeans, 
+ #             min.nc = 2, 
+  #            max.nc = 10, 
+   #           method = "kmeans", 
+    #          index = "alllong")
 ```
 
 ### 1.4.1. Testando com três clusters
@@ -461,122 +461,171 @@ A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pes
 
 ### 1.5.1. UF
 
+O bloco abaixo mostra como agregar o peso amostral utilizando as funções do `tidyverse`.
+
 ```{r}
 
-uf <- dados_cluster |> 
+descritivo_uf <- dados_cluster |> 
   count(UF, cluster, wt = V1028) |> 
   pivot_wider(names_from = cluster, values_from = n) |> 
   mutate(
     perc_Persistente = Persistente / (Persistente + Precarizado + Transitório),
     perc_Precarizado = Precarizado / (Persistente + Precarizado + Transitório),
     perc_Transitório = Transitório / (Persistente + Precarizado + Transitório)
-  )
+  ) |> 
+  select(-Persistente, -Precarizado, -Transitório) |> 
+  arrange(-perc_Persistente)
     
-    
+descritivo_uf
 ```
+
+Abaixo, consideramos o peso amostral através da função `svydesign` da bilioteca `survey` , para utilizarmos nas demais funções do pacote.
+
+```{r}
+design <- svydesign(ids = ~UPA, weights = ~V1028, data = dados_cluster)
+
+```
+
+A função `svyby` é utilizada para calcular proporções de variáveis categóricas, agregando o objeto design que modela o peso populacional.
 
 ```{r}
 
-design <- svydesign(ids = ~UPA, weights = ~V1028, data = dados_cluster)
 
-uf_2 <- svyby(~Persistente + Precarizado + Transitório, ~UF, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |>
-  select(UF, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_uf_2 <- svyby(~Persistente + Precarizado + Transitório, ~UF, design, svymean) |> 
+  select(Persistente, Precarizado, Transitório) |> 
+  arrange(-Persistente)
 
+descritivo_uf_2
 ```
+
+Como observado, os resultados através das duas técnicas são os mesmos. De acordo com os resultados, os dos maiores percentuais por cluster são:
+
+-   **Persistente**: Rio Grande do Sul e Amapá.
+
+-   **Precarizado:** Maranhão e Ceará.
+
+-   **Transitório**: Paraná e Distrito Federal.
+
+Nas próximas análises seguiremos adotando as funções do pacote `survey`.
 
 ### 1.5.2. Região
 
 ```{r}
-regiao <- svyby(~Persistente + Precarizado + Transitório, ~regiao, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |>
-  select(regiao, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_regiao <- svyby(~Persistente + Precarizado + Transitório, ~regiao, design, svymean) |> 
+  select(Persistente, Precarizado, Transitório) |> 
+  arrange(-Persistente)
 
-
+descritivo_regiao
 ```
+
+Ao analisar por região, temos que o Sul é que têm o maior percentual de persistentes. Enquanto o Nordeste e Centro-Oeste concentram os maiores números de, respectivamente, Precarizados e Transitórios.
 
 ### 1.5.3. Situação do domicílio
 
 ```{r}
-urbanidade <- svyby(~V1022, ~cluster, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |> 
-  select(V1022, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_urbanidade <- svyby(~V1022, ~cluster, design, svymean) |> 
+  select(V1022Rural, V1022Urbana)
+descritivo_urbanidade
+
+#urbanidade_2 <- svyby(~Persistente + Precarizado + Transitório, ~V1022, design, svymean) |> 
+#  select(Persistente, Precarizado, Transitório)
+#urbanidade_2
 ```
+
+O maior grau de urbanização estão entre os TCP's persistentes, e o de ruralização, nos de precarizados.
 
 ### 1.5.4. Quantidade de pessoas no domicílio
 
 ```{r}
 
-qtd_pessoas <- svyby(~pessoas_domicilio, ~cluster, design, svymean, na.rm = TRUE)
+descritivo_qtd_pessoas <- svyby(~pessoas_domicilio, ~cluster, design, svymean, na.rm = TRUE) |> 
+  select(-se)
 
+descritivo_qtd_pessoas
 ```
+
+Os precarizados estão inseridos em domicílios mais habitados, e o persistentes, nos menos habitados.
 
 ### 1.5.5. Posicão familiar
 
 ```{r}
 
-chefe_familia <- svyby(~chefe_domicilio, ~cluster, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |> 
-  select(chefe_domicilio, perc_Persistente, perc_Precarizado, perc_Transitório)
-  
+descritivo_chefe_familia <- svyby(~chefe_domicilio, ~cluster, design, svymean) |> 
+  select(1:3)
+
+descritivo_chefe_familia
 ```
+
+Observe que os persistentes têm percentual consideralmente maior de responsáveis pelo domicílio do que os demais clusters. A diferença entre os transitórios e precarizados parece não ser significativa.
 
 ### 1.5.6. Gênero
 
 ```{r}
-genero <- svyby(~V2007, ~cluster, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |> 
-  select(V2007, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_genero <- svyby(~V2007, ~cluster, design, svymean) |> 
+  select(1:3)
+
+descritivo_genero
 ```
+
+A proporção de homens é majoritária nos clustes de transitórios e persistentes, e as mulheres no de precarizados.
 
 ### 1.5.5. Idade
 
 ```{r}
 
-idade <- svyby(~V2009, ~cluster, design, svymean, na.rm = TRUE)
+descritivo_idade <- svyby(~V2009, ~cluster, design, svymean, na.rm = TRUE)
 
+descritivo_idade
 ```
+
+Os persistentes são os mais velhos, enquanto os transitórios são os mais jovens.
 
 ### 1.5.7. Escolaridade
 
 ```{r}
-escolaridade <- svyby(~ensino_superior, ~cluster, design, svymean) |>
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |> 
-  select(VD3004, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_escolaridade <- svyby(~ensino_superior, ~cluster, design, svymean) |> 
+  select(1:3)
+
+descritivo_escolaridade
 ```
 
-### 1.5.8. Cor ou raça
+Os precarizados têm o menor grau de pessoas com ensino superior. Enquanto, a diferença entre os transitórios e persistentes parece ser não significativa.
+
+### 1.5.6. Raça
 
 ```{r}
-raca <- svyby(~Persistente + Precarizado + Transitório, ~V2010, design, svymean) |> 
-  mutate(total = Persistente + Precarizado + Transitório,
-         perc_Persistente = Persistente / total,
-         perc_Precarizado = Precarizado / total,
-         perc_Transitório = Transitório / total) |> 
-  select(V2010, perc_Persistente, perc_Precarizado, perc_Transitório)
+descritivo_raca <- svyby(~V2010, ~cluster, design, svymean) |> 
+  select(1:6)
 ```
+
+Considerando as três principais raças, as maiores proporções de clusters são:
+
+-   Brancos: Persistentes;
+
+-   Pardos: Pracarizados;
+
+-   Pretos: Transitórios.
 
 ### 1.5.9. Atividade profissional
 
+Analisar quais setores/atividades estão associados a cada padrão de carreira gera um nível de complexidade em que as funções do `survey` não são capazes de lidar, e por isso utilizamos as do `tidyverse` considerando os pesos populacionais.
+
+A análise setorial é realizada apenas considerando a ocupação de trabalho por conta própria, mas ao considerar que a
+
 ```{r}
+
+descritivo_atividade <- dados_tratados |> 
+  filter(id %in% dados_cluster$id) |> 
+  select(id, ocupacao, V1016, VD4010, V1028) |> 
+  left_join(id_cluster, by = "id") |> 
+  filter(ocupacao == "TCP") |> 
+  group_by(cluster, VD4010) %>%
+  summarise(freq = sum(V1028), .groups = "drop") %>%  # aqui entra o peso
+  group_by(cluster) %>%
+  mutate(prop = freq / sum(freq)) %>%
+  arrange(cluster, desc(freq)) |> 
+  select(-freq) |> 
+  pivot_wider(names_from = cluster, values_from = prop)
 
 atividade_1 <- svyby(~Persistente + Precarizado + Transitório, ~VD4010, design, svymean) |> 
   select(VD4010, Persistente, Precarizado, Transitório)
