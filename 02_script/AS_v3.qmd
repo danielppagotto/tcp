@@ -608,9 +608,7 @@ Considerando as três principais raças, as maiores proporções de clusters sã
 
 ### 1.5.9. Atividade profissional
 
-Analisar quais setores/atividades estão associados a cada padrão de carreira gera um nível de complexidade em que as funções do `survey` não são capazes de lidar, e por isso utilizamos as do `tidyverse` considerando os pesos populacionais.
-
-A análise setorial é realizada apenas considerando a ocupação de trabalho por conta própria, mas ao considerar que a
+Analisar quais setores são mais frequentes em cada padrão de carreira tem um nível de complexidade em que as funções do `survey` não conseguem suprir. É preciso considerar que um TCP, durante as cinco entrevistas, podem mudar de atividade. E portanto, é preciso ponderar cada unidade do tempo. Então, a seguir, analisaremos quais setores mais frequentes para cada cluster na condição de TCP. Utilizaremos as funções do `tidyverse` considerando os pesos populacionais.
 
 ```{r}
 
@@ -619,25 +617,28 @@ descritivo_atividade <- dados_tratados |>
   select(id, ocupacao, V1016, VD4010, V1028) |> 
   left_join(id_cluster, by = "id") |> 
   filter(ocupacao == "TCP") |> 
-  group_by(cluster, VD4010) %>%
-  summarise(freq = sum(V1028), .groups = "drop") %>%  # aqui entra o peso
-  group_by(cluster) %>%
-  mutate(prop = freq / sum(freq)) %>%
+  group_by(cluster, VD4010) |> 
+  summarise(freq = sum(V1028), .groups = "drop") |> 
+  group_by(cluster) |> 
+  mutate(prop = freq / sum(freq)) |> 
   arrange(cluster, desc(freq)) |> 
   select(-freq) |> 
   pivot_wider(names_from = cluster, values_from = prop)
 
-atividade_1 <- svyby(~Persistente + Precarizado + Transitório, ~VD4010, design, svymean) |> 
-  select(VD4010, Persistente, Precarizado, Transitório)
-
-atividade_2 <- svyby(~VD4010,~cluster, design, svymean)
+descritivo_atividade
 ```
+
+Os resultados mostram que os dois setores mais frequentes daqueles que exercem o trabalho por conta própria de forma persistente é o comércio, reparação de veículos automotores e motocicletas (18%) e outros serviços (15%).
+
+No caso dos indivíduos caracterizados por períodos no desemprego/inatividade, quando ocupados no trabalho autônomo, exercem com maior frequência nos setores comércio, reparação de veículos automotores e motocicletas (23%) e Agricultura, pecuária, produção florestal, pesca e aquicultura (17%).
+
+E por fim, no caso dos indivíduos que transitam entre o emprego no setor privado e o trabalho por conta própria, exercem com maior frequência no setor de Construção (18%) e Informação, comunicação e atividades financeiras, imobiliárias, profissionais e administrativas (16%).
 
 ### 1.5.10. Renda média
 
 ```{r}
 
-renda_media <- svyby(~renda_media, ~cluster, design, svymean, na.rm = TRUE)
+descritivo_renda <- svyby(~renda_media, ~cluster, design, svymean, na.rm = TRUE)
 ```
 
 #### 1.5.10.1. Renda média por região
