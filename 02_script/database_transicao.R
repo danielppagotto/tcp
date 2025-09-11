@@ -145,4 +145,4 @@ data_3 <- data_2 |>
          filho_responsavel_conjuge = if_else(is.na(filho_responsavel_conjuge), 0, filho_responsavel_conjuge))
 
 #Salvando
-write.csv(data_3,"as_2023_2024_v3.csv")
+write.csv(data_3,"as_2023_2024_v4.csv")

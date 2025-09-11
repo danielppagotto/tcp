@@ -43,6 +43,12 @@ library(readxl)
 library(survey)
 library(cluster)
 library(NbClust)
+library(nnet)
+library(geojsonio)
+library(geobr)
+library(ggspatial)
+library(sf)
+
 ```
 
 A seguir é selecionada as variáveis que serão importantes para análises e definida a variável *Trimestre_Ano*.
@@ -52,7 +58,7 @@ A seguir é selecionada as variáveis que serão importantes para análises e de
 #| warning: false
 #| paged-print: false
 
-data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024_v3.csv") |> 
+data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024_v4.csv") |> 
   rename(pessoas_domicilio = n)
 
 data_1 <- data_0 |>   
@@ -530,6 +536,50 @@ Como observado, os resultados através das duas técnicas são os mesmos. De aco
 
 -   **Transitório**: Paraná e Distrito Federal.
 
+```{r}
+descritivo_uf_long <- descritivo_uf |> 
+  pivot_longer(
+    cols = 2:4,
+    names_to = "Categoria",
+    values_to = "Proporcao") |> 
+  mutate(Categoria = recode(Categoria,
+    "perc_Persistente" = "Persistente",
+    "perc_Transitório" = "Intermitente",
+    "perc_Precarizado" = "Necessidade"
+  ))
+
+
+descritivo_uf_long |> 
+  ggplot(aes(x = reorder(UF, (Proporcao * (Categoria == "Persistente")), FUN = sum),
+             y = Proporcao,
+             fill = Categoria)) +
+  geom_bar(stat = "identity",
+           position = "fill",
+           width = 0.8,
+           color = "white",
+           alpha = 0.7) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Unidade Federativa",
+    y = NULL,
+    fill = NULL
+  ) +
+  geom_text(aes(label = scales::percent(Proporcao, accuracy = 1)),
+            position = position_fill(vjust = 0.5),
+            size = 3,
+            color = "white") +
+  scale_fill_manual(
+    values = c(
+      "Persistente" = "#33A02C",
+      "Necessidade" = "#E34A33",
+      "Intermitente" = "#FDBF00")) +
+  theme_minimal() +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  theme(axis.text.x = element_blank(),
+        legend.position = "top")
+```
+
 Nas próximas análises seguiremos adotando as funções do pacote `survey`.
 
 ### 1.5.2. Região
@@ -688,6 +738,42 @@ No caso dos indivíduos caracterizados por períodos no desemprego/inatividade, 
 
 E por fim, no caso dos indivíduos que transitam entre o emprego no setor privado e o trabalho por conta própria, exercem com maior frequência no setor de Construção (18%) e Informação, comunicação e atividades financeiras, imobiliárias, profissionais e administrativas (16%).
 
+```{r}
+descritivo_atividade_long <- descritivo_atividade |> 
+  pivot_longer(cols = 2:4,
+               names_to = "Cluster",
+               values_to = "Proporcao") |> 
+  mutate(Cluster = recode(Cluster,
+                            "Precarizado" = "Necessidade",
+                            "Transitório" = "Intermitente")) |> 
+  filter(VD4010 != "Atividades mal definidas")
+
+descritivo_atividade_long %>%
+  group_by(VD4010) %>%
+  mutate(total = sum(Proporcao)) %>%
+  ungroup() %>%
+  mutate(
+    VD4010 = fct_reorder(VD4010, -total, .desc = TRUE),              # ordem maior -> menor
+    VD4010 = fct_relabel(VD4010, ~ str_wrap(.x, width = 40))       # quebra sem perder a ordem
+  ) %>%
+  ggplot(aes(x = VD4010, y = Proporcao, fill = Cluster)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.8,
+           color = "white", alpha = 0.8) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  scale_fill_manual(values = c("Persistente" = "#33A02C",
+                               "Necessidade"  = "#E34A33",
+                               "Intermitente" = "#FDBF00")) +
+  theme_minimal() +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  geom_text(aes(label = scales::percent(Proporcao, accuracy = 1)),   # rótulo percentual
+            position = position_stack(vjust = 0.5), 
+            size = 3.5, color = "white") +
+  theme(axis.text.y = element_text(size = 9),   # após coord_flip os rótulos ficam em axis.text.y
+        legend.position = "top")
+```
+
 ### 1.5.10. Renda média
 
 ```{r}
@@ -721,4 +807,17 @@ descritivo_renda_regiao <- dados_cluster |>
 
 
 renda_regiao <- svyby(~renda_media, ~cluster + regiao, design, svymean, na.rm = TRUE)
+```
+
+## 1.6. Análise exploratória multinomial
+
+```{r}
+
+design$variables$cluster <- factor(design$variables$cluster)
+design$variables$cluster <- relevel(design$variables$cluster, ref = "Persistente")
+
+modelo_teste <- multinom(cluster ~ V2007 + V2009 + V1022 + ensino_superior + regiao + chefe_domicilio, data = design$variables)
+
+summary(modelo_teste)
+exp(coef(modelo_teste))
 ```
