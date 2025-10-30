@@ -1,0 +1,837 @@
+---
+title: "Análise de mobilidade de carreira"
+format: html
+editor: visual
+---
+
+## Análise de mobilidade de carreira
+
+A análise de mobilidade de carreira é realizada a partir de uma situação de desocupação para trabalho no setor privado (TSP) ou trabalho por conta própria (TCP). Portanto, pretende-se analisar os fatores associados à esse desfecho (se tornar TSP ou TCP). É utilizado microdados da PNAD Contínua do período que compreende os anos de 2018 a 2024. A database foi construída em outro script e agora iremos prosseguir com os tratamentos de modo a criar um dataframe para fins de análise preditiva.
+
+Abaixo é carregada as bibliotecas que serão utilizadas.
+
+```{r}
+#| message: false
+#| warning: false
+#| paged-print: false
+
+options(scipen = 999)
+
+library(tidyverse)
+library(questionr)
+library(descriptio)
+library(purrr)
+library(stringr)
+library(ggseqplot)
+library(patchwork)
+library(grid)
+library(scales)
+library(RColorBrewer)
+```
+
+Abaixo é carregado a base de dados.
+
+```{r}
+#| message: false
+#| warning: false
+data_raiz <- vroom::vroom(
+  "C:/Users/alefs/Downloads/data_mobilidade.csv",
+                       progress = FALSE,
+                       show_col_types = FALSE)
+```
+
+### 1. Tratamento dos dados.
+
+A seguir, criaremos a variável Trimestre_ano e competência, selecionaremos apenas maiores de 18, desenvolveremos a variável ocupação para fins da análise. E definiremos a variável periodo para identificar o contexto histórico (pré-pandemia, pandemia e pós-pandemia).
+
+```{r}
+data <- data_raiz |> 
+  mutate(Trimestre_Ano = paste(Trimestre, Ano, 
+                                   sep = "-"),
+         competen = yq(paste0(Ano, "/", Trimestre)),
+         .before = UF) |> 
+  filter(V2009 >= 18) |> 
+  mutate(V4012_ajust = 
+           case_when(
+                V4012 == "Conta própria"  ~ "TCP",
+                V4012 == "Empregado do setor privado" ~ "ESPriv",
+                V4012 == "Trabalhador doméstico" ~ "TD",
+                V4012 == "Empregado do setor público (inclusive empresas de economia mista)" ~ "ESPub",
+                V4012 == "Militar do exército, da marinha, da aeronáutica, da polícia militar ou do corpo de bombeiros militar" ~ 
+                  "ESPub",  
+                V4012 == "Trabalhador familiar não remunerado" ~ "TFNR",
+                V4012 == "Empregador" ~ "EMP"), 
+         .after = Ano) |> 
+  mutate(
+      ocupacao = 
+        case_when(
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas ocupadas" ~ 
+                                  as.character(V4012_ajust),
+                VD4001 == "Pessoas na força de trabalho" & 
+                VD4002 == "Pessoas desocupadas" ~ "Desocupado",
+                VD4001 == "Pessoas fora da força de trabalho" ~ 
+                                  "PFT"), .after = V4012_ajust) |> 
+  mutate(periodo = case_when(
+                            competen < "2020-04-01" ~ "Pré-pandemia",
+  competen >= "2023-04-01" ~ "Pós-pandemia",
+  competen >= "2020-04-01" & competen < "2023-04-01" ~ "Pandemia"
+)) |> 
+  filter(V2009 <= 65)
+```
+
+#### 1.1. Estruturação em sequência.
+
+A seguir, iremos transformar os dados em sequência conforme o número da entrevista. Com isso cada entrevista representará uma nova coluna que conterá a ocupação registrada do indivíduo naquele momento. E também filtraremos apenas aqueles que completaram a pesquisa dentro do período analisado (2018-2024).
+
+```{r}
+data_wide <- 
+  data |>
+  select(id, V1016,ocupacao) |> 
+  pivot_wider(names_from = V1016, 
+              values_from = ocupacao,
+              values_fn = list) |> 
+  relocate(id,`1`, `2`, `3`, `4`, `5`) |>
+  mutate(across(`1`:`5`, as.character)) |> 
+    filter(if_all(2:6, ~ . != "NULL"))
+```
+
+Foram identificados 422.152 indivíduos que completaram a pesquisa no período analisado. No entanto, muitos deles não fazem parte do escopo de análise, isto é, pessoas que não saíram de situação de desocupação para TSP ou TCP.
+
+#### 1.2. Filtrando mobilidades de carreira.
+
+A mobilidade de carreira analisada será com relação aos indivíduos que após permanecerem por pelo menos dois períodos subsequentes em situação de desocupação migraram para trabalho por conta própria ou emprego no setor privado permanecendo por pelo menos mais dois trimestres. Isso pode ocorrer nos primeiros quatro trimestres na pesquisa ou nos últimos, no qual iremos identificar através da variável "padrao".
+
+```{r}
+data_mob <- data_wide  |> 
+  mutate(id_seq = row_number()) |> 
+  mutate(transicao = case_when(`1` == "Desocupado" &
+                               `2` == "Desocupado" &
+                                `3` == "TCP" &
+                                 `4` == "TCP" ~ "Migrou para TCP",
+                               `2` == "Desocupado" &
+                               `3` == "Desocupado" &
+                                `4` == "TCP" &
+                                 `5` == "TCP" ~ "Migrou para TCP",
+                               `1` == "Desocupado" &
+                               `2` == "Desocupado" &
+                                `3` == "ESPriv" &
+                                 `4` == "ESPriv" ~ "Migrou para o setor privado",
+                               `2` == "Desocupado" &
+                               `3` == "Desocupado" &
+                                `4` == "ESPriv" &
+                                 `5` == "ESPriv" ~ "Migrou para o setor privado"),
+         padrao = case_when(
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "TCP"        & `4` == "TCP"        ~ "padrao1",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "TCP"        & `5` == "TCP"        ~ "padrao2",
+      
+      `1` == "Desocupado" & `2` == "Desocupado" &
+      `3` == "ESPriv"     & `4` == "ESPriv"     ~ "padrao3",
+      
+      `2` == "Desocupado" & `3` == "Desocupado" &
+      `4` == "ESPriv"     & `5` == "ESPriv"     ~ "padrao4")) |> 
+  filter(!is.na(transicao))
+
+#Juntando a base de dados em formato longo
+data_2 <- data_mob |> 
+  select(id, padrao) |> 
+  left_join(data, by = c("id" = "id"))
+                               
+
+data_mob |> 
+  count(transicao) |> 
+  mutate(percentual = round(n / sum(n),2))
+```
+
+Foram identificados 4.708 indivíduos que cumpriram com as condições de análise. Desses, 75% migraram para o setor privado e o os demais para o trabalho por conta própria.
+
+### 2. Análise descritiva.
+
+Nessa seção iremos realizar análise exploratória dos dados através de estatística descritiva. Mas antes, será realizado o tramento de forma a facilitar a análise.
+
+#### 2.1. Tratamento.
+
+**O seguinte conjunto de variáveis serão agregadas:** V1023 (Tipo de área); V2009 (Idade); V2007 (Sexo); VD3004 (Escolaridade); V2010 (Cor ou raça); V2005 (Condição no domicílio); UF; c(V4076, V40761, V40762, V40763) (tempo de desemprego); qtd_pessoas (quantida média de pessoas no domicílio das 5 entrevistas); periodo_ajust (contexto histórico em que ocorreu a migração); filho_responsavel (filho somente do responsável); filho_responsavel_conjuge (filho do responsável e conjuge).
+
+**Para fins de análise descritiva, são criadas as seguintes variáveis derivadas:** ensino_medio; ensino_superior; raça; posicao_familiar (chefe ou não-chefe); tempo de desemprego (em meses).
+
+E por fim, é criada a variável de região do Brasil.
+
+```{r}
+features <- 
+  data_2 |> 
+  mutate(periodo_ajust = lead(periodo, n = 1)) |> 
+  filter(
+    case_when(
+      padrao %in% c("padrao1", "padrao3") ~ V1016 == 2,
+      padrao %in% c("padrao2" ,"padrao4")            ~ V1016 == 3,
+      TRUE                                ~ TRUE
+    )
+  ) |> 
+  select(id, V1023, V2009, V2007, VD3004, V2010, V2005, UF, V4076,
+         V40761, V40762, V40763, qtd_pessoas, periodo_ajust,
+         filho_responsavel, filho_responsavel_conjuge) |> 
+  rename(idade = V2009, genero = V2007) |> 
+  
+  #ESCOLARIDADE
+  mutate(ensino_medio = if_else(VD3004 %in% c("Médio completo ou equivalente", "Superior completo", "Superior incompleto ou equivalente"), "Ensino médio completo", "Ensino médio incompleto"),
+         ensino_superior = if_else(VD3004 == "Superior completo", "Superior completo", "Sem superior completo"),
+         raça = if_else(V2010 == "Branca", "Branco", "Não branco"),
+         posicao_familiar = if_else(V2005 == "Pessoa responsável pelo domicílio", "Responsável pelo domicílio", "Não responsável pelo domicílio")) |> 
+  
+  #TEMPO DE DESEMPREGO
+  mutate(tempo_1 = case_when(V4076 == "Menos de 1 mês" ~ 1,
+                             V4076 == "De 1 ano a menos de 2 anos" ~ 12,
+                             TRUE ~ 0),
+         tempo_2 = if_else(is.na(V40761), 0, V40761),
+         tempo_3 = if_else(is.na(V40762), 0, V40762),
+         tempo_4 = if_else(is.na(V40763),0, V40763*12),
+         tempo_desemprego = tempo_1 + tempo_2 + tempo_3 + tempo_4) |>
+  select(-tempo_1, -tempo_2, -tempo_3, -tempo_4,
+         -V4076, - V40761, -V40762, -V40763) |> 
+  
+  #TRATAMENTO DE FILHOS
+  mutate(filhos = case_when(V2005 == "Pessoa responsável pelo domicílio" ~ filho_responsavel + filho_responsavel_conjuge,
+                            V2005 %in% c("Cônjuge ou companheiro(a) de sexo diferente", "Cônjuge ou companheiro(a) do mesmo sexo") ~ filho_responsavel_conjuge,
+                                         TRUE ~ 0)) |> 
+  select(-filho_responsavel, -filho_responsavel_conjuge) |> 
+  
+  #CRIANDO VARIÁVEL REGIÃO
+  mutate(regiao = case_when(
+    UF %in% c("Acre", "Amapá", "Amazonas", "Pará", "Rondônia", "Roraima", "Tocantins") ~ "Norte",
+    UF %in% c("Alagoas", "Bahia", "Ceará", "Maranhão", "Paraíba", "Pernambuco", "Piauí", "Rio Grande do Norte", "Sergipe") ~ "Nordeste",
+    UF %in% c("Distrito Federal", "Goiás", "Mato Grosso", "Mato Grosso do Sul") ~ "Centro-Oeste",
+    UF %in% c("Espírito Santo", "Minas Gerais", "Rio de Janeiro", "São Paulo") ~ "Sudeste",
+    UF %in% c("Paraná", "Rio Grande do Sul", "Santa Catarina") ~ "Sul",
+    TRUE ~ NA_character_
+  ))
+```
+
+A seguir, será calculada a média da variável renda_familiar_media dos dois trimestres em que o indivíduo permaneceu no desemprego. E também a renda média do indivíduo nos dois trimestres que permaneceu como TSP ou TCP. Por fim, definido o dataframe final.
+
+```{r}
+renda_domicilio <- data_2 |> 
+  select(id, padrao, V1016, renda_familiar_media) |> 
+  pivot_wider(names_from = V1016, values_from = renda_familiar_media) |> 
+  mutate(
+    renda_domiciliar = case_when(
+      padrao %in% c("padrao1", "padrao3") ~ (`1` + `2`) / 2,
+      padrao %in% c("padrao2", "padrao4") ~ (`2` + `3`) / 2
+    )
+  ) |> 
+  select(id, renda_domiciliar) 
+
+renda_individual <- data_2 |> 
+  select(id, padrao, V1016, VD4016) |> 
+  pivot_wider(names_from = V1016, values_from = VD4016) |> 
+  mutate(renda_depois = case_when(
+      padrao %in% c("padrao1", "padrao3") ~ (`3` + `4`) / 2,
+      padrao %in% c("padrao2", "padrao4") ~ (`4` + `5`) / 2)) |> 
+  select(id, renda_depois)
+
+data_final <- data_mob |> 
+  left_join(features, by = "id") |> 
+  left_join(renda_domicilio, by = "id") |> 
+  left_join(renda_individual, by = "id") |> 
+  select(-`1`, -`2`, -`3`, -`4`, -`5`, -padrao)
+
+data_pospandemia <- data_final |> 
+  filter(periodo_ajust == "Pós-pandemia")
+```
+
+Antes de entrarmos na análise descritiva propriamente dita, iremos definir as funções que serão úteis, filtrando apenas o período de pós-pandemia.
+
+```{r}
+descritivo_categorica <- function(variavel) {
+  
+  data_pospandemia |> 
+  count({{variavel}}, transicao) |> 
+  pivot_wider(names_from = transicao, values_from = n) |> 
+  mutate(percentual_tcp = `Migrou para TCP`/ (`Migrou para TCP` +
+           `Migrou para o setor privado`),
+         percentual_tsp = `Migrou para o setor privado`/(`Migrou para TCP` +
+           `Migrou para o setor privado`))
+}
+
+descritivo_numerica <- function(variavel) {
+  data_pospandemia %>%
+    group_by(transicao) |> 
+    summarise(across({{variavel}}, list(
+      media = ~mean(.x, na.rm = TRUE),
+      desvio = ~sd(.x, na.rm = TRUE),
+      mediana = ~median(.x, na.rm = TRUE),
+      minimo = ~min(.x, na.rm = TRUE),
+      maximo = ~max(.x, na.rm = TRUE)
+    )))
+}
+```
+
+#### 2.2. Localidade.
+
+A seguir iremos analisar o percentual de migrações por região de saúde e em seguida por unidade federativa.
+
+##### 2.2.1 Região do Brasil.
+
+```{r}
+
+
+descritivo_regiao <- descritivo_categorica(regiao)
+
+chisq.test(table(data_pospandemia$regiao, data_pospandemia$transicao))
+
+data_pospandemia %>%
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  count(regiao, transicao) %>%
+  group_by(regiao) %>%
+  mutate(proporcao = n / sum(n)) %>%
+  ungroup() %>%
+  mutate(regiao = fct_reorder(regiao, proporcao, .fun = max, .desc = TRUE)) %>%
+  ggplot(aes(x = regiao, y = proporcao, fill = transicao)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = scales::percent(proporcao, accuracy = 0.1)),
+            position = position_stack(vjust = 0.5), color = "white", size = 3.5) +
+  coord_flip() +
+  labs(x = NULL, y = NULL, fill = "Transição") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank())
+
+```
+
+Observe que o maior percentual de mobilidade para trabalho por conta própria foi na região Sudeste com 22,5% e o menor, no Centro-Oeste com 17,4%.
+
+##### 2.2.2 Unidade Federativa
+
+```{r}
+descritivo_uf <- descritivo_categorica(UF)
+
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$UF))
+
+
+data_pospandemia %>%
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  count(UF, transicao) %>%
+  group_by(UF) %>%
+  mutate(proporcao = n / sum(n)) %>%
+  ungroup() %>%
+  mutate(UF = fct_reorder(UF, proporcao, .fun = max, .desc = TRUE)) %>%
+  ggplot(aes(x = UF, y = proporcao, fill = transicao)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = scales::percent(proporcao, accuracy = 0.1)),
+            position = position_stack(vjust = 0.5), color = "white", size = 3.5) +
+  coord_flip() +
+  labs(x = NULL, y = NULL, fill = "Transição") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank())
+
+```
+
+O Estado que teve a maior proporção de mobilidade para o trabalho por conta própria foi Amapá com 36,4%, enquanto Tocantins, Sergipe e Rondônia não houve registros de pessoas que saíram de desocupação para TCP.
+
+#### 2.3. Gênero.
+
+```{r}
+descritivo_genero <- descritivo_categorica(genero)
+
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$genero))
+
+data_pospandemia |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  group_by(genero) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = genero)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_1.png", plot = grafico_1, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(genero == "Homem") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_2.png", plot = grafico_2, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(genero == "Mulher") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_3.png", plot = grafico_3, width = 6, height = 6, dpi = 300)
+```
+
+O percentual de homens é de 57%, do qual possui uma mobilidade maior para o trabalho por conta própria (23%) contra as mulheres (18%).
+
+#### 2.4. Idade.
+
+```{r}
+descritivo_idade <- descritivo_numerica(idade)
+
+shapiro.test(data_final$idade[data_final$periodo_ajust == "Pós-pandemia"]) #Teste de normalidade
+bartlett.test(idade ~ transicao, data = teste) #Teste de variância
+wilcox.test(idade ~ transicao, data = teste) # Teste de diferença
+
+data_final |> 
+  ggplot(aes(x = idade)) + 
+  geom_density(fill = "lightblue") +
+  labs(x = "Idade", y = "Densidade") +
+  theme_minimal()
+
+
+data_final |> 
+  ggplot(aes(x = transicao, y = idade, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+```
+
+#### 2.5. Raça ou cor.
+
+```{r}
+ descritivo_raça <- descritivo_categorica(raça)
+ 
+chisq.test(table(data_pospandemia$transicao, data_pospandemia$raça))
+ 
+
+data_pospandemia |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  group_by(raça) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = raça)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_5.png", plot = grafico_5, width = 6, height = 6, dpi = 300)
+
+data_pospandemia |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(raça == "Branco") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_6.png", plot = grafico_6, width = 6, height = 6, dpi = 300)
+
+data_pospandemia |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(raça == "Não branco") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_7.png", plot = grafico_7, width = 6, height = 6, dpi = 300)
+ 
+```
+
+#### 2.6. Escolaridade.
+
+##### 2.6.1. Ensino médio.
+
+```{r}
+descritivo_ensino_medio <- descritivo_categorica(ensino_medio)
+
+chisq.test(data_pospandemia$transicao, data_pospandemia$ensino_medio)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  group_by(ensino_medio) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = ensino_medio)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_11.png", plot = grafico_11, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(ensino_medio == "Ensino médio completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_12.png", plot = grafico_12, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(ensino_medio == "Ensino médio incompleto") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_13.png", plot = grafico_13, width = 6, height = 6, dpi = 300)
+```
+
+##### 2.6.1. Ensino superior.
+
+```{r}
+descritivo_ensino_superior <- descritivo_categorica(ensino_superior)
+
+chisq.test(data_pospandemia$transicao, data_pospandemia$ensino_superior)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  group_by(ensino_superior) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = ensino_superior)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_11.2.png", plot = grafico_11.2, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(ensino_superior == "Superior completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_12.2.png", plot = grafico_12.2, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(ensino_superior == "Sem superior completo") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_13.2.png", plot = grafico_13.2, width = 6, height = 6, dpi = 300)
+```
+
+#### 2.7. Posição familiar.
+
+```{r}
+descritivo_posicaofamiliar <- descritivo_categorica(posicao_familiar)
+
+chisq.test(data_pospandemia$transicao, data_pospandemia$posicao_familiar)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  group_by(posicao_familiar) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = posicao_familiar)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_14.png", plot = grafico_14, width = 10, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(posicao_familiar == "Responsável pelo domicílio") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_15.png", plot = grafico_15, width = 6, height = 6, dpi = 300)
+
+data_final |>
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  filter(posicao_familiar == "Não responsável pelo domicílio") |> 
+  group_by(transicao) |> 
+  count() |> 
+  ggplot(aes(x = "", y = n, fill = transicao)) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = percent(n / sum(n))),
+    position = position_stack(vjust = 0.5),
+    color = "white", size = 10
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 16)) +
+  labs(fill = NULL)
+
+#ggsave("grafico_16.png", plot = grafico_16, width = 6, height = 6, dpi = 300)
+```
+
+#### 2.7. Tempo de desemprego.
+
+```{r}
+descritivo_desemprego <- descritivo_numerica(tempo_desemprego)
+
+shapiro.test(data_pospandemia$tempo_desemprego)
+bartlett.test(tempo_desemprego ~ transicao, data = data_pospandemia)
+wilcox.test(tempo_desemprego ~ transicao, data = data_pospandemia)
+
+quantile(data_final$tempo_desemprego, probs = c(0.2, 0.4, 0.6, 0.8), na.rm = TRUE)
+
+data_final |> 
+  filter(tempo_desemprego < 30) |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = tempo_desemprego)) + 
+  geom_density(fill = "lightblue") +
+  labs(x = "Idade", y = "Densidade") +
+  theme_minimal()
+
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = transicao, y = tempo_desemprego, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+```
+
+#### 2.7. Quantidade de pessoas no domicílio.
+
+```{r}
+descritivo_pessoasdomicilio <- descritivo_numerica(qtd_pessoas)
+
+shapiro.test(data_pospandemia$qtd_pessoas)
+bartlett.test(qtd_pessoas ~ transicao, data = data_pospandemia)
+wilcox.test(qtd_pessoas ~ transicao, data = data_pospandemia)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = qtd_pessoas)) + 
+  geom_density(fill = "lightblue") +
+  labs(x = "Idade", y = "Densidade") +
+  theme_minimal()
+
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = transicao, y = qtd_pessoas, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+```
+
+#### 2.8. Renda do domicílio.
+
+```{r}
+descritivo_rendadomicilio <- descritivo_numerica(renda_domiciliar)
+
+shapiro.test(data_pospandemia$renda_domiciliar)
+bartlett.test(renda_domiciliar ~ transicao, data = data_pospandemia)
+wilcox.test(renda_domiciliar ~ transicao, data = data_pospandemia)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = renda_domiciliar)) + 
+  geom_density(fill = "lightblue") +
+  labs(x = "Idade", y = "Densidade") +
+  theme_minimal()
+
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = transicao, y = renda_domiciliar, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+```
+
+#### 2.9. Quantidade de filhos.
+
+```{r}
+descritivo_filhos <- descritivo_numerica(filhos)
+
+shapiro.test(data_pospandemia$filhos)
+bartlett.test(filhos ~ transicao, data = data_pospandemia)
+wilcox.test(filhos ~ transicao, data = data_pospandemia)
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = filhos)) + 
+  geom_density(fill = "lightblue") +
+  labs(x = "Idade", y = "Densidade") +
+  theme_minimal()
+
+
+data_final |> 
+  filter(periodo_ajust == "Pós-pandemia") |> 
+  ggplot(aes(x = transicao, y = filhos, fill = transicao)) + 
+  geom_boxplot(outlier.color = "red") +
+  theme_minimal() +
+  labs(y = "Idade", fill = NULL) +  # remove título do eixo Y e legenda
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),  # remove os nomes das categorias no eixo X
+    axis.title.x = element_blank()  # remove o título do eixo X (só pra garantir)
+  )
+```
