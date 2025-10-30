@@ -364,14 +364,20 @@ colnames(mds_df_kmeans) <- c("Dim1",
 Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria 3 clusters.
 
 ```{r}
+scree_plot <- fviz_nbclust(mds_df_kmeans, 
+             kmeans, 
+             k.max = 7,
+             method = "wss")
 
 #nc <- NbClust(mds_df_kmeans,
  #             diss = dissim,
-  #            min.nc = 2, 
-   #           max.nc = 7, 
+  #            min.nc = 2,
+   #           max.nc = 7,
     #          method = "kmeans",
      #         distance = NULL,
       #        index = "all")
+
+ggsave(plot = scree_plot, "scree_plot.png", width = 8, height =  6)
 ```
 
 ```{r}
@@ -618,7 +624,7 @@ sub_design <- subset(design, cluster %in% c("Persistente", "Transitório"))
 
 sub_design$variables$V1022 <- ifelse(sub_design$variables$V1022 == "Urbana", 1, 0)
 
-svyttest(V1022 ~ cluster, sub_design)
+svychisq(~V1022 + cluster, sub_design, statistic = "F")
 ```
 
 ### 1.5.4. Quantidade de pessoas no domicílio
@@ -642,9 +648,9 @@ descritivo_chefe_familia <- svyby(~chefe_domicilio, ~cluster, design, svymean) |
 
 sub_design <- subset(design, cluster %in% c("Precarizado", "Transitório"))
 
-sub_design$variables$chefe_domicilio <- ifelse(sub_design$variables$ensino_superior == "Superior completo", 1, 0)
+sub_design$variables$chefe_domicilio <- ifelse(sub_design$variables$chefe_domicilio == "Responsável pelo domicílio", 1, 0)
 
-svyttest(chefe_domicilio ~ cluster, sub_design)
+svychisq(~chefe_domicilio + cluster, sub_design, statistic = "F")
 
 descritivo_chefe_familia
 ```
@@ -693,7 +699,7 @@ sub_design <- subset(design, cluster %in% c("Persistente", "Transitório"))
 
 sub_design$variables$V1022 <- ifelse(sub_design$variables$ensino_superior == "Superior completo", 1, 0)
 
-svyttest(V1022 ~ cluster, sub_design)
+svychisq(~ensino_superior + cluster, sub_design, statistic = "F")
 
 descritivo_escolaridade
 ```
@@ -831,4 +837,93 @@ modelo_teste <- multinom(cluster ~ V2007 + V2009 + V1022 + ensino_superior + reg
 
 summary(modelo_teste)
 exp(coef(modelo_teste))
+```
+
+## 1.7. Correlações
+
+```{r}
+
+taxa_desocupacao <- read_excel("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/desocupacao_tabela4099.xlsx") |> 
+  select(-cod_uf)
+
+idh <- read_excel("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/idh.xlsx")
+
+descritivo_uf_2$uf <- rownames(descritivo_uf_2)
+
+tabela_correlacao <- descritivo_uf_2 |> 
+  left_join(taxa_desocupacao, by = "uf") |> 
+  left_join(idh, by = "uf") |> 
+  mutate(
+    uf = case_when(
+      uf == "Acre" ~ "AC",
+      uf == "Alagoas" ~ "AL",
+      uf == "Amapá" ~ "AP",
+      uf == "Amazonas" ~ "AM",
+      uf == "Bahia" ~ "BA",
+      uf == "Ceará" ~ "CE",
+      uf == "Distrito Federal" ~ "DF",
+      uf == "Espírito Santo" ~ "ES",
+      uf == "Goiás" ~ "GO",
+      uf == "Maranhão" ~ "MA",
+      uf == "Mato Grosso" ~ "MT",
+      uf == "Mato Grosso do Sul" ~ "MS",
+      uf == "Minas Gerais" ~ "MG",
+      uf == "Pará" ~ "PA",
+      uf == "Paraíba" ~ "PB",
+      uf == "Paraná" ~ "PR",
+      uf == "Pernambuco" ~ "PE",
+      uf == "Piauí" ~ "PI",
+      uf == "Rio de Janeiro" ~ "RJ",
+      uf == "Rio Grande do Norte" ~ "RN",
+      uf == "Rio Grande do Sul" ~ "RS",
+      uf == "Rondônia" ~ "RO",
+      uf == "Roraima" ~ "RR",
+      uf == "Santa Catarina" ~ "SC",
+      uf == "São Paulo" ~ "SP",
+      uf == "Sergipe" ~ "SE",
+      uf == "Tocantins" ~ "TO",
+    ),
+    regiao = case_when(
+      uf %in% c("AC","AP","AM","PA","RO","RR","TO") ~ "Norte",
+      uf %in% c("AL","BA","CE","MA","PB","PE","PI","RN","SE") ~
+        "Nordeste",
+      uf %in% c("DF","GO","MT","MS") ~ "Centro-Oeste",
+      uf %in% c("ES","MG","RJ","SP") ~ "Sudeste",
+      uf %in% c("PR","RS","SC") ~ "Sul"
+  ))
+
+test_correlacao <- cor.test(tabela_correlacao$IDHM,
+                            tabela_correlacao$Precarizado,
+                            alternative = "less",
+                            method = "kendall")
+test_correlacao
+
+r <- round(test_correlacao$estimate, 3)
+p_value <- test_correlacao$p.value
+p_text <- ifelse(p_value < 0.01, "p < 0.01", paste("p =", round(p_value, 3)))
+
+grafico_correlacao <- tabela_correlacao |> 
+  ggplot(aes(x = IDHM, y = Precarizado)) +
+  geom_point() +
+  geom_label(aes(label = uf, fill = regiao)) +
+  labs(fill = "") +
+  geom_smooth(method = "lm", se =  FALSE) +
+  theme_minimal() +
+  xlab("Índice de Desenvolvimento Humano (IDH)") +
+  ylab("Percentual de TCP por necesidade") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme(
+    text = element_text(size = 16),          
+    axis.title = element_text(size = 14),    
+    axis.text = element_text(size = 14),     
+    legend.title = element_text(size = 16),  
+    legend.text = element_text(size = 14),
+    legend.position = "bottom"
+  ) +
+  annotate("text", x = 0.78, y = 0.4, 
+           label = paste("r =", r, ",", p_text),
+           size = 6, hjust = 1)
+
+
+#ggsave(grafico_correlacao, filename = "grafico_correlacao.png", height = 1100, width = 1500, units = "px", dpi = 150)
 ```
