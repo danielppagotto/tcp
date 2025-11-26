@@ -496,6 +496,92 @@ dados_cluster <- dados_tratados |>
 
 A PnadC por se tratar de uma pesquisa de amostragem complexa, é necessário pesos populacionais nas análises descritivas e inferenciais, no qual é representada pela variável V1028, que calibra pelas projeções populacionais. Essa variável indica quantas pessoas existem com as mesmas características daquela amostra/indivíduo. As função da biblioteca `survey`, são indicadas para incoporar os referidos pesos nas análises pretendidas. No entanto, também é possível realizar isso de forma mais rudimentar, usando as funções do `tidyverse`, tendo V1028 como peso. Para fins didáticos e para futuras consultas, testaremos ambas as técnicas.
 
+Abaixo, definiremos o objeto `design` que irá incorporar os pesos populacionais. E iremos transformar as variáveis categóricas em dummy binárias, para podermos aplicar os testes de diferenças.
+
+```{r}
+design <- svydesign(ids = ~UPA, weights = ~V1028, data = dados_cluster)
+
+#Binarizando a variável chefe_familia
+design$variables$chefe_domicilio <- ifelse(design$variables$chefe_domicilio == "Responsável pelo domicílio", 1, 0)
+
+#Binarizando a variável ensino_superior
+design$variables$ensino_superior <- ifelse(design$variables$ensino_superior == "Superior completo", 1, 0)
+```
+
+Os testes de diferenças serão aplicados exclusivamente nas variáveis que apresentarem resultados descritivos próximos. Primeiro, aplicaremos o teste de independência de Rao & Scott (variáveis categóricas/dummy) e o teste T Student (variáveis numéricas), para cada combinação possíveis de pares dos clusters. E depois, aplicaremos os testes post-hoc para corrigir a taxa de erro familiar, e obter, os p-valores ajustados para observar diferenças significativas.
+
+```{r}
+
+#Definindo os pares
+clusters <- unique(design$variables$cluster)
+pares <- combn(clusters, 2, simplify = FALSE)
+
+#Definindo função para o teste de Rao & Scott
+posthoc_chi <- function(var){
+  
+  teste_chi_par <- function(par){
+    sub_d <- subset(design, cluster %in% par)
+    
+    f <- as.formula(paste("~", var, "+ cluster"))
+    
+    out <- tryCatch(
+      svychisq(f, sub_d, statistic = "F"),
+      error = function(e) return(list(p.value = NA))
+    )
+    
+    tibble(
+      par = paste(par[1], "vs", par[2]),
+      p_valor = as.numeric(out$p.value)
+    )
+  }
+  
+  map_dfr(pares, teste_chi_par) |> 
+    mutate(variavel = var,
+           p_bonferroni = p.adjust(p_valor, method = "bonferroni"),
+           p_holm = p.adjust(p_valor, method = "holm"),
+           p_fdr        = p.adjust(p_valor, method = "fdr"),
+           significativo = p_bonferroni < 0.05
+           )
+}
+
+#Definindo função para o teste T Student
+
+posthoc_ttest <- function(var){
+  
+  teste_t_par <- function(par){
+    
+    sub_d <- subset(design, cluster %in% par)
+    
+    f <- as.formula(paste(var, "~ cluster"))
+    
+    out <- tryCatch(
+      svyttest(f, sub_d),
+      error = function(e) return(list(p.value = NA, statistic = NA,
+                                      estimate = NA))
+    )
+    
+    dif <- if(is.null(out$estimate)) NA else -out$estimate[[1]]
+    
+    tibble(
+      par = paste(par[1], "vs", par[2]),
+      diferenca_media = dif,
+      t_valor = as.numeric(out$statistic),
+      p_valor = as.numeric(out$p.value)
+    )
+  }
+  
+  map_dfr(pares, teste_t_par) |> 
+    mutate(
+      variavel = var,
+      p_bonferroni = p.adjust(p_valor, method = "bonferroni"),
+      p_holm = p.adjust(p_valor, method = "holm"),
+      p_fdr = p.adjust(p_valor, method = "fdr"),
+      significativo = p_bonferroni < 0.05
+    )
+  
+}
+```
+
 ### 1.5.1. UF
 
 O bloco abaixo mostra como agregar o peso amostral utilizando as funções do `tidyverse`.
@@ -516,12 +602,7 @@ descritivo_uf <- dados_cluster |>
 descritivo_uf
 ```
 
-Abaixo, consideramos o peso amostral através da função `svydesign` da bilioteca `survey` , para utilizarmos nas demais funções do pacote.
-
-```{r}
-design <- svydesign(ids = ~UPA, weights = ~V1028, data = dados_cluster)
-
-```
+Abaixo, consideramos o peso amostral através da função `svydesign` da bilioteca `survey` , para utilizarmos nas demais funções do pacote
 
 A função `svyby` é utilizada para calcular proporções de variáveis categóricas, agregando o objeto design que modela o peso populacional.
 
@@ -620,11 +701,7 @@ descritivo_urbanidade
 O maior grau de urbanização estão entre os TCP's persistentes, e o de ruralização, nos de precarizados.
 
 ```{r}
-sub_design <- subset(design, cluster %in% c("Persistente", "Transitório"))
-
-sub_design$variables$V1022 <- ifelse(sub_design$variables$V1022 == "Urbana", 1, 0)
-
-svychisq(~V1022 + cluster, sub_design, statistic = "F")
+diferencas_urbanidade <- posthoc_chi("V1022")
 ```
 
 ### 1.5.4. Quantidade de pessoas no domicílio
@@ -646,18 +723,14 @@ Os precarizados estão inseridos em domicílios mais habitados, e o persistentes
 descritivo_chefe_familia <- svyby(~chefe_domicilio, ~cluster, design, svymean) |> 
   select(1:3)
 
-sub_design <- subset(design, cluster %in% c("Precarizado", "Transitório"))
-
-sub_design$variables$chefe_domicilio <- ifelse(sub_design$variables$chefe_domicilio == "Responsável pelo domicílio", 1, 0)
-
-svychisq(~chefe_domicilio + cluster, sub_design, statistic = "F")
+diferencas_chefe_familia <- posthoc_chi("chefe_domicilio")
 
 descritivo_chefe_familia
 ```
 
 Observe que os persistentes têm percentual consideralmente maior de responsáveis pelo domicílio do que os demais clusters. A diferença entre os transitórios e precarizados parece não ser significativa.
 
-### 1.5.6. Gênero
+1.5.6. Gênero
 
 ```{r}
 descritivo_genero <- svyby(~V2007, ~cluster, design, svymean) |> 
@@ -800,9 +873,8 @@ descritivo_renda <- svyby(~renda_media, ~cluster, design, svymean, na.rm = TRUE)
 
 sub_design <- subset(design, cluster %in% c("Persistente", "Transitório"))
 
-sub_design$variables$renda_media <- ifelse(sub_design$variables$ensino_superior == "Superior completo", 1, 0)
 
-svyttest(renda_media ~ cluster, sub_design)
+diferencas_renda <- posthoc_ttest("renda_media")
 ```
 
 #### 1.5.10.1. Renda média por região
@@ -826,20 +898,7 @@ descritivo_renda_regiao <- dados_cluster |>
 renda_regiao <- svyby(~renda_media, ~cluster + regiao, design, svymean, na.rm = TRUE)
 ```
 
-## 1.6. Análise exploratória multinomial
-
-```{r}
-
-design$variables$cluster <- factor(design$variables$cluster)
-design$variables$cluster <- relevel(design$variables$cluster, ref = "Persistente")
-
-modelo_teste <- multinom(cluster ~ V2007 + V2009 + V1022 + ensino_superior + regiao + chefe_domicilio, data = design$variables)
-
-summary(modelo_teste)
-exp(coef(modelo_teste))
-```
-
-## 1.7. Correlações
+## 1.7. Correlação de IDH e cluster por Necessidade
 
 ```{r}
 
