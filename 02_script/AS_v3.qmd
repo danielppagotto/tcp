@@ -33,7 +33,6 @@ library(TraMineR)
 library(tidyverse)
 library(TraMineRextras)
 library(FactoMineR)
-library(questionr)
 library(descriptio)
 library(purrr)
 library(stringr)
@@ -59,7 +58,7 @@ A seguir é selecionada as variáveis que serão importantes para análises e de
 #| warning: false
 #| paged-print: false
 
-data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/as_2023_2024_v4.csv") |> 
+data_0 <- read_csv("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/as_2023_2024_v4.csv") |> 
   rename(pessoas_domicilio = n)
 
 data_1 <- data_0 |>   
@@ -79,25 +78,25 @@ data_1 <- data_0 |>
 
 O objeto de análise é a categoria de ocupação (V4012). Para isso serão necessárias algumas adaptações. A primeira é reduzir o número de categorias considerando a natureza delas e com fins de simplificação de análise. A tabela abaixo sintetiza as transformações realizadas.
 
-+-----------------------------------------------+-------------------------------+--------------+
-| Antes do tratamento                           | Após o tratamento             | Abreviação   |
-+===============================================+:=============================:+:============:+
-| -   Empregado do setor privado. (V4012)       | Empregado do setor privado    | ESPR         |
-|                                               |                               |              |
-| -   Trabalhador doméstico. (V4012)            |                               |              |
-+-----------------------------------------------+-------------------------------+--------------+
-| -   Pessoa fora da força de tratalho (VD4001) | Fora do trabalho              | PFT          |
-|                                               |                               |              |
-| -   Pessoa desocupada (VD4002)                |                               |              |
-+-----------------------------------------------+-------------------------------+--------------+
-| -   Conta própria. (V4012)                    | Trabalhador por conta própria | TCP          |
-+-----------------------------------------------+-------------------------------+--------------+
-| -   Empregado do setor público                | Empregado do setor público    | ESPub        |
-|                                               |                               |              |
-| -   Militar                                   |                               |              |
-+-----------------------------------------------+-------------------------------+--------------+
-| -   Empregador                                | Empregador                    | EMP          |
-+-----------------------------------------------+-------------------------------+--------------+
++---------------------------------------------+-------------------------------+--------------+
+| Antes do tratamento                         | Após o tratamento             | Abreviação   |
++=============================================+:=============================:+:============:+
+| - Empregado do setor privado. (V4012)       | Empregado do setor privado    | ESPR         |
+|                                             |                               |              |
+| - Trabalhador doméstico. (V4012)            |                               |              |
++---------------------------------------------+-------------------------------+--------------+
+| - Pessoa fora da força de tratalho (VD4001) | Fora do trabalho              | PFT          |
+|                                             |                               |              |
+| - Pessoa desocupada (VD4002)                |                               |              |
++---------------------------------------------+-------------------------------+--------------+
+| - Conta própria. (V4012)                    | Trabalhador por conta própria | TCP          |
++---------------------------------------------+-------------------------------+--------------+
+| - Empregado do setor público                | Empregado do setor público    | ESPub        |
+|                                             |                               |              |
+| - Militar                                   |                               |              |
++---------------------------------------------+-------------------------------+--------------+
+| - Empregador                                | Empregador                    | EMP          |
++---------------------------------------------+-------------------------------+--------------+
 
 ```{r}
 
@@ -171,11 +170,11 @@ dados_tratados |>
 
 No próximo bloco, serão selecionadas as variáveis de interesse:
 
--   id: identificação do indivíduo;
+- id: identificação do indivíduo;
 
--   V1016: número da entrevista (de 1 a 5)
+- V1016: número da entrevista (de 1 a 5)
 
--   ocupação: categoria ocupacional.
+- ocupação: categoria ocupacional.
 
 A partir da próxima subseção começamos a lidar com a análise de sequência propriamente dita.
 
@@ -364,11 +363,11 @@ colnames(mds_df_kmeans) <- c("Dim1",
 Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria 3 clusters.
 
 ```{r}
-scree_plot <- fviz_nbclust(mds_df_kmeans, 
-             kmeans, 
-             k.max = 7,
-             method = "wss")
-
+#scree_plot <- fviz_nbclust(mds_df_kmeans, 
+#             kmeans, 
+#             k.max = 7,
+#             method = "wss")
+#
 #nc <- NbClust(mds_df_kmeans,
  #             diss = dissim,
   #            min.nc = 2,
@@ -377,11 +376,11 @@ scree_plot <- fviz_nbclust(mds_df_kmeans,
      #         distance = NULL,
       #        index = "all")
 
-ggsave(plot = scree_plot, "scree_plot.png", width = 8, height =  6)
+#ggsave(plot = scree_plot, "scree_plot.png", width = 8, height =  6)
 ```
 
 ```{r}
-numero_clusters <- nc[["All.index"]]
+#numero_clusters <- nc[["All.index"]]
 ```
 
 ### 1.4.1. Testando com três clusters
@@ -417,31 +416,36 @@ ggplot(mds_df_kmeans, aes(x=Dim1,
 ```
 
 ```{r}
+windowsFonts(Times = windowsFont("Times New Roman"))
+
+par(family = "Times")
+
 indice_cluster <- seqIplot(seq, 
     group = kmeans_result$cluster,
     border = NA, 
     ylab = c("3.300 seq.", "1.448 seq.", "1.252 seq."),
     ltext = c("Empregado do setor privado", "Pessoa sem trabalho", "Trabalhador por conta própria"),
     yaxis = FALSE,
-    cex.legend = 1.3,
     use.layout = TRUE,
     legend.prop = 0.15,
-    main = c("Persistentes", "Necessidade", "Intermitentes"))
+    main = c("Persistentes", "Necessidade", "Intermitente"))
 
+indice_cluster
 ```
 
 ```{r}
 png("indice_cluster.png", width = 1500, height = 1200, res = 200) # largura, altura e resolução
-seqIplot(seq, 
+windowsFonts(Times = windowsFont("Times New Roman"))
+par(family = "Times")
+indice_cluster <- seqIplot(seq, 
     group = kmeans_result$cluster,
     border = NA, 
-    ylab = c("3.300 seq. (55%)", "1.448 seq. (24%)", "1.252 seq. (21%)"),
+    ylab = c("3.300 seq.", "1.448 seq.", "1.252 seq."),
     ltext = c("Empregado do setor privado", "Pessoa sem trabalho", "Trabalhador por conta própria"),
     yaxis = FALSE,
-    cex.legend = 1.2,
     use.layout = TRUE,
     legend.prop = 0.15,
-    main = c("Persistentes", "Necessidade", "Intermitentes"))
+    main = c("Persistentes", "Necessidade", "Intermitente"))
 dev.off() # fecha o dispositivo gráfico
 ```
 
@@ -526,22 +530,24 @@ posthoc_chi <- function(var){
     
     out <- tryCatch(
       svychisq(f, sub_d, statistic = "F"),
-      error = function(e) return(list(p.value = NA))
+      error = function(e) return(list(statistic = NA, p.value = NA))
     )
     
     tibble(
       par = paste(par[1], "vs", par[2]),
+      estatistica_f = as.numeric(out$statistic),
       p_valor = as.numeric(out$p.value)
     )
   }
   
   map_dfr(pares, teste_chi_par) |> 
-    mutate(variavel = var,
-           p_bonferroni = p.adjust(p_valor, method = "bonferroni"),
-           p_holm = p.adjust(p_valor, method = "holm"),
-           p_fdr        = p.adjust(p_valor, method = "fdr"),
-           significativo = p_bonferroni < 0.05
-           )
+    mutate(
+      variavel = var,
+      p_bonferroni = p.adjust(p_valor, method = "bonferroni"),
+      p_holm = p.adjust(p_valor, method = "holm"),
+      p_fdr = p.adjust(p_valor, method = "fdr"),
+      significativo = p_bonferroni < 0.05
+    )
 }
 
 #Definindo função para o teste T Student
@@ -618,11 +624,11 @@ descritivo_uf_2
 
 Como observado, os resultados através das duas técnicas são os mesmos. De acordo com os resultados, os dos maiores percentuais por cluster são:
 
--   **Persistente**: Rio Grande do Sul e Amapá.
+- **Persistente**: Rio Grande do Sul e Amapá.
 
--   **Precarizado:** Maranhão e Ceará.
+- **Precarizado:** Maranhão e Ceará.
 
--   **Transitório**: Paraná e Distrito Federal.
+- **Transitório**: Paraná e Distrito Federal.
 
 ```{r}
 descritivo_uf_long <- descritivo_uf |> 
@@ -701,6 +707,7 @@ descritivo_urbanidade
 O maior grau de urbanização estão entre os TCP's persistentes, e o de ruralização, nos de precarizados.
 
 ```{r}
+
 diferencas_urbanidade <- posthoc_chi("V1022")
 ```
 
@@ -730,7 +737,7 @@ descritivo_chefe_familia
 
 Observe que os persistentes têm percentual consideralmente maior de responsáveis pelo domicílio do que os demais clusters. A diferença entre os transitórios e precarizados parece não ser significativa.
 
-1.5.6. Gênero
+### 1.5.6. Gênero
 
 ```{r}
 descritivo_genero <- svyby(~V2007, ~cluster, design, svymean) |> 
@@ -741,7 +748,11 @@ descritivo_genero
 
 A proporção de homens é majoritária nos clustes de transitórios e persistentes, e as mulheres no de precarizados.
 
-### 1.5.5. Idade
+```{r}
+diferencas_genero <- posthoc_chi("V2007")
+```
+
+### 1.5.7. Idade
 
 ```{r}
 
@@ -762,7 +773,7 @@ descritivo_idade
 
 Os persistentes são os mais velhos, enquanto os transitórios são os mais jovens.
 
-### 1.5.7. Escolaridade
+### 1.5.8. Escolaridade
 
 ```{r}
 descritivo_escolaridade <- svyby(~ensino_superior, ~cluster, design, svymean) |> 
@@ -779,22 +790,33 @@ descritivo_escolaridade
 
 Os precarizados têm o menor grau de pessoas com ensino superior. Enquanto, a diferença entre os transitórios e persistentes parece ser não significativa.
 
-### 1.5.6. Raça
+### 1.5.9. Raça
 
 ```{r}
 descritivo_raca <- svyby(~V2010, ~cluster, design, svymean) |> 
   select(1:6)
+
+sub_design <- update(design,
+                     is_branco = ifelse(V2010 == "Branca",1,0))
+
+teste_rao_scott <- svychisq(~is_branco + cluster,
+                            design = sub_design,
+                            statistic = "F")
+
+print(teste_rao_scott)
+
+diferenca_raca <- posthoc_chi("is_branco")
 ```
 
 Considerando as três principais raças, as maiores proporções de clusters são:
 
--   Brancos: Persistentes;
+- Brancos: Persistentes;
 
--   Pardos: Pracarizados;
+- Pardos: Pracarizados;
 
--   Pretos: Transitórios.
+- Pretos: Transitórios.
 
-### 1.5.9. Atividade profissional
+### 1.5.10. Atividade profissional
 
 Analisar quais setores são mais frequentes em cada padrão de carreira tem um nível de complexidade em que as funções do `survey` não conseguem suprir. É preciso considerar que um TCP, durante as cinco entrevistas, podem mudar de atividade. E portanto, é preciso ponderar cada unidade do tempo. Então, a seguir, analisaremos quais setores mais frequentes para cada cluster na condição de TCP. Utilizaremos as funções do `tidyverse` considerando os pesos populacionais.
 
@@ -803,6 +825,15 @@ Analisar quais setores são mais frequentes em cada padrão de carreira tem um n
 descritivo_atividade <- dados_tratados |> 
   filter(id %in% dados_cluster$id) |> 
   select(id, ocupacao, V1016, VD4010, V1028) |> 
+  mutate(
+    VD4010 = case_when(
+      grepl("^Agricultura", VD4010) ~ "Agricultura",
+      grepl("^(Construção|Indústria geral)", VD4010) ~ "Indústria",
+      grepl("^(Comércio)", VD4010) ~ "Comércio",
+      grepl("^(Outros Serviços|Informação, comunicação|Transporte|Alojamento|Educação)", VD4010) ~ "Serviços",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
   left_join(id_cluster, by = "id") |> 
   filter(ocupacao == "TCP") |> 
   group_by(cluster, VD4010) |> 
@@ -864,7 +895,7 @@ grafico_atividade <- descritivo_atividade_long %>%
 ggsave(plot = grafico_atividade, filename = "grafico_atividade.png", height = 1100, width = 1500, units = "px", dpi = 150)
 ```
 
-### 1.5.10. Renda média
+### 1.5.11. Renda média
 
 ```{r}
 
@@ -877,7 +908,7 @@ sub_design <- subset(design, cluster %in% c("Persistente", "Transitório"))
 diferencas_renda <- posthoc_ttest("renda_media")
 ```
 
-#### 1.5.10.1. Renda média por região
+#### 1.5.11.1. Renda média por região
 
 ```{r}
 descritivo_renda_regiao <- dados_cluster |> 
@@ -898,20 +929,44 @@ descritivo_renda_regiao <- dados_cluster |>
 renda_regiao <- svyby(~renda_media, ~cluster + regiao, design, svymean, na.rm = TRUE)
 ```
 
-## 1.7. Correlação de IDH e cluster por Necessidade
+## 1.12. Correlação de IDH e cluster por Necessidade
 
 ```{r}
 
-taxa_desocupacao <- read_excel("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/desocupacao_tabela4099.xlsx") |> 
-  select(-cod_uf)
+cluster_necessidade_uf <- descritivo_uf |> 
+  mutate(
+    UF = case_when(
+      UF == "Acre" ~ "AC",
+      UF == "Alagoas" ~ "AL",
+      UF == "Amapá" ~ "AP",
+      UF == "Amazonas" ~ "AM",
+      UF == "Bahia" ~ "BA",
+      UF == "Ceará" ~ "CE",
+      UF == "Distrito Federal" ~ "DF",
+      UF == "Espírito Santo" ~ "ES",
+      UF == "Goiás" ~ "GO",
+      UF == "Maranhão" ~ "MA",
+      UF == "Mato Grosso" ~ "MT",
+      UF == "Mato Grosso do Sul" ~ "MS",
+      UF == "Minas Gerais" ~ "MG",
+      UF == "Pará" ~ "PA",
+      UF == "Paraíba" ~ "PB",
+      UF == "Paraná" ~ "PR",
+      UF == "Pernambuco" ~ "PE",
+      UF == "Piauí" ~ "PI",
+      UF == "Rio de Janeiro" ~ "RJ",
+      UF == "Rio Grande do Norte" ~ "RN",
+      UF == "Rio Grande do Sul" ~ "RS",
+      UF == "Rondônia" ~ "RO",
+      UF == "Roraima" ~ "RR",
+      UF == "Santa Catarina" ~ "SC",
+      UF == "São Paulo" ~ "SP",
+      UF == "Sergipe" ~ "SE",
+      UF == "Tocantins" ~ "TO",
+    )) |> 
+  select(UF, perc_Precarizado)
 
-idh <- read_excel("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/idh.xlsx")
-
-descritivo_uf_2$uf <- rownames(descritivo_uf_2)
-
-tabela_correlacao <- descritivo_uf_2 |> 
-  left_join(taxa_desocupacao, by = "uf") |> 
-  left_join(idh, by = "uf") |> 
+idh <- read_excel("C:/Users/alefs/OneDrive/Documentos/LAPEI-CIGETS/GitHub/tcp/01_dados/idh.xlsx") |> 
   mutate(
     uf = case_when(
       uf == "Acre" ~ "AC",
@@ -941,18 +996,20 @@ tabela_correlacao <- descritivo_uf_2 |>
       uf == "São Paulo" ~ "SP",
       uf == "Sergipe" ~ "SE",
       uf == "Tocantins" ~ "TO",
-    ),
-    regiao = case_when(
-      uf %in% c("AC","AP","AM","PA","RO","RR","TO") ~ "Norte",
-      uf %in% c("AL","BA","CE","MA","PB","PE","PI","RN","SE") ~
-        "Nordeste",
-      uf %in% c("DF","GO","MT","MS") ~ "Centro-Oeste",
-      uf %in% c("ES","MG","RJ","SP") ~ "Sudeste",
-      uf %in% c("PR","RS","SC") ~ "Sul"
-  ))
+    ))
+
+tabela_correlacao <- cluster_necessidade_uf |> 
+  left_join(idh, by = c("UF" = "uf")) |> 
+    mutate(regiao = case_when(
+      UF %in% c("AC","AP","AM","PA","RO","RR","TO") ~ "Norte",
+      UF %in% c("AL","BA","CE","MA","PB","PE","PI","RN","SE")~ "Nordeste",
+      UF %in% c("DF","GO","MT","MS") ~ "Centro-Oeste",
+      UF %in% c("ES","MG","RJ","SP") ~ "Sudeste",
+      UF %in% c("PR","RS","SC") ~ "Sul"
+    ))
 
 test_correlacao <- cor.test(tabela_correlacao$IDHM,
-                            tabela_correlacao$Precarizado,
+                            tabela_correlacao$perc_Precarizado,
                             alternative = "less",
                             method = "kendall")
 test_correlacao
@@ -962,14 +1019,14 @@ p_value <- test_correlacao$p.value
 p_text <- ifelse(p_value < 0.01, "p < 0.01", paste("p =", round(p_value, 3)))
 
 grafico_correlacao <- tabela_correlacao |> 
-  ggplot(aes(x = IDHM, y = Precarizado)) +
+  ggplot(aes(x = IDHM, y = perc_Precarizado)) +
   geom_point() +
-  geom_label(aes(label = uf, fill = regiao)) +
+  geom_label(aes(label = UF, fill = regiao)) +
   labs(fill = "") +
   geom_smooth(method = "lm", se =  FALSE) +
   theme_minimal() +
   xlab("Índice de Desenvolvimento Humano (IDH)") +
-  ylab("Percentual de TCP por necesidade") +
+  ylab("Percentual de TCP por sobrevivência") +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme(
     text = element_text(size = 16),          
@@ -983,6 +1040,7 @@ grafico_correlacao <- tabela_correlacao |>
            label = paste("r =", r, ",", p_text),
            size = 6, hjust = 1)
 
+grafico_correlacao
 
 #ggsave(grafico_correlacao, filename = "grafico_correlacao.png", height = 1100, width = 1500, units = "px", dpi = 150)
 ```
