@@ -363,6 +363,20 @@ colnames(mds_df_kmeans) <- c("Dim1",
 Não existe clareza sobre o melhor número de clusters. De acordo com o elbow plot seria 3 clusters.
 
 ```{r}
+silhoutte_1 <- fviz_nbclust(
+  mds_df_kmeans,
+  kmeans,
+  method = "silhouette",
+  k.max = 7)
+
+ggsave(filename = "silhoutte_1.png",
+       plot = silhoutte_1,
+       width = 8,
+       height = 6,
+       dpi = 300)
+```
+
+```{r}
 #scree_plot <- fviz_nbclust(mds_df_kmeans, 
 #             kmeans, 
 #             k.max = 7,
@@ -675,7 +689,9 @@ grafico_uf <- descritivo_uf_long |>
         legend.position = "top",
         legend.text = element_text(size = 14))
 
-ggsave(plot = grafico_uf, filename = "grafico_uf.png", height = 1000, width = 1500, units = "px", dpi = 150)
+grafico_uf
+
+#ggsave(plot = grafico_uf, filename = "grafico_uf.png", height = 1000, width = 1500, units = "px", dpi = 150)
 ```
 
 Nas próximas análises seguiremos adotando as funções do pacote `survey`.
@@ -929,11 +945,13 @@ descritivo_renda_regiao <- dados_cluster |>
 renda_regiao <- svyby(~renda_media, ~cluster + regiao, design, svymean, na.rm = TRUE)
 ```
 
-## 1.12. Correlação de IDH e cluster por Necessidade
+## 1.6. Correlação de IDH e cluster por Necessidade
+
+#Subseção descontinuada
 
 ```{r}
 
-cluster_necessidade_uf <- descritivo_uf |> 
+cluster_necessidade_uf <- descritivo_regiao |> 
   mutate(
     UF = case_when(
       UF == "Acre" ~ "AC",
@@ -1043,4 +1061,322 @@ grafico_correlacao <- tabela_correlacao |>
 grafico_correlacao
 
 #ggsave(grafico_correlacao, filename = "grafico_correlacao.png", height = 1100, width = 1500, units = "px", dpi = 150)
+```
+
+## 1.7. Validando amostra 2
+
+```{r}
+#|warning: FALSE
+# Objeto de sequência
+
+rownames(amostra2) <- amostra2$id_seq
+
+#cores_personalizadas <- c(
+#  "EMP"    = "#1F78B4",
+#  "ESPriv" = "#FDBF00",
+#  "ESPub"  = "#A65628", 
+#  "PFT"    = "#E34A33",
+#  "TCP"    = "#33A02C"
+#)
+
+cores_personalizadas <- c(
+  "ESPriv" = "#FDBF00",
+  "PFT"    = "#E34A33",
+  "TCP"    = "#33A02C"
+)
+
+
+
+
+seq <- seqdef(amostra2,
+              var = 2:6,
+              id = amostra2[[7]],
+              cnames = c("1", "2", "3", "4", "5"),
+              cpal = cores_personalizadas
+              )
+
+# este objeto abaixo serve para juntar às bases originais 
+
+base_join <- cbind(seq, 
+                   amostra2$id_seq, 
+                   amostra2$id) |> 
+              rename(id_seq_original = `amostra2$id_seq`,
+                     id = `amostra2$id`) |> 
+              mutate(id_pos_seq = row_number())
+
+# Definindo a matriz de dissimilaridades
+
+couts <- seqsubm(seq, 
+                 method="CONSTANT", 
+                 cval=2)
+
+dissim <- seqdist(seq, 
+                  method="OM", 
+                  sm=couts, 
+                  indel=1.5,
+                  full.matrix = TRUE)
+
+# aplicando PCA
+mds <- cmdscale(dissim, k=2)  # Redução para 2 dimensões
+
+mds_df_kmeans <- as.data.frame(mds)
+
+colnames(mds_df_kmeans) <- c("Dim1", 
+                             "Dim2")
+
+```
+
+```{r}
+silhoutte_2 <- fviz_nbclust(
+  mds_df_kmeans,
+  kmeans,
+  method = "silhouette",
+  k.max = 7)
+
+ggsave(filename = "silhoutte_2.png",
+       plot = silhoutte_2,
+       width = 8,
+       height = 6,
+       dpi = 300)
+```
+
+```{r}
+#Aplicando clustering k-means
+set.seed(123) 
+mds_df_kmeans$sequencia_id <- 1:nrow(mds_df_kmeans)
+
+
+kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], 
+                        centers=3) 
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
+
+
+ggplot(mds_df_kmeans, aes(x=Dim1, 
+                          y=Dim2, 
+                          color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), 
+             vjust=-1, 
+             hjust=0.5, 
+             size=3) +  
+  labs(title="Gráfico de Dispersão com 3 Clusters", 
+       x="Dimensão 1", 
+       y="Dimensão 2") +
+  theme_minimal()
+
+windowsFonts(Times = windowsFont("Times New Roman"))
+
+par(family = "Times")
+
+indice_cluster <- seqIplot(seq, 
+    group = kmeans_result$cluster,
+    border = NA, 
+    yaxis = FALSE,
+    use.layout = TRUE,
+    legend.prop = 0.15,
+    ylab = c("1.226 seq. (20%)", "1.477 seq. (25%)", "3.297 seq. (55%)"),
+    main = c("Intermitente", "Necessidade", "Persistente"))
+
+indice_cluster
+```
+
+```{r}
+base_cluster_2 <- cbind(seq, 
+                   amostra1$id_seq, 
+                   amostra1$id,
+                   mds_df_kmeans$cluster) %>%
+  rename(id_sequenciamento = `amostra1$id_seq`,
+         id = `amostra1$id`,
+         cluster = `mds_df_kmeans$cluster`)  |> 
+  mutate(cluster = as.character(cluster),
+         cluster = case_when(cluster == "1" ~ "Transitório",
+                              cluster == "2" ~ "Precarizado",
+                              cluster == "3" ~ "Persistente"))
+```
+
+```{r}
+png("indice_cluster_amostra2.png", width = 1500, height = 1200, res = 200) # largura, altura e resolução
+windowsFonts(Times = windowsFont("Times New Roman"))
+par(family = "Times")
+indice_cluster <- seqIplot(seq, 
+    group = kmeans_result$cluster,
+    border = NA, 
+    ltext = c("Empregado do setor privado", "Pessoa sem trabalho", "Trabalhador por conta própria"),
+    yaxis = FALSE,
+    use.layout = TRUE,
+    legend.prop = 0.15,
+    ylab = c("1.226 seq. (20%)", "1.477 seq. (25%)", "3.297 seq. (55%)"),
+    main = c("Intermitente", "Necessidade", "Persistente"))
+dev.off() # fecha o dispositivo gráfico
+```
+
+## 1.8. Validando amostra 3
+
+```{r}
+
+#|warning: FALSE
+# Objeto de sequência
+
+rownames(amostra3) <- amostra3$id_seq
+
+#cores_personalizadas <- c(
+#  "EMP"    = "#1F78B4",
+#  "ESPriv" = "#FDBF00",
+#  "ESPub"  = "#A65628", 
+#  "PFT"    = "#E34A33",
+#  "TCP"    = "#33A02C"
+#)
+
+cores_personalizadas <- c(
+  "ESPriv" = "#FDBF00",
+  "PFT"    = "#E34A33",
+  "TCP"    = "#33A02C"
+)
+
+
+
+
+seq <- seqdef(amostra3,
+              var = 2:6,
+              id = amostra3[[7]],
+              cnames = c("1", "2", "3", "4", "5"),
+              cpal = cores_personalizadas
+              )
+
+# este objeto abaixo serve para juntar às bases originais 
+
+base_join <- cbind(seq, 
+                   amostra3$id_seq, 
+                   amostra3$id) |> 
+              rename(id_seq_original = `amostra3$id_seq`,
+                     id = `amostra3$id`) |> 
+              mutate(id_pos_seq = row_number())
+
+# Definindo a matriz de dissimilaridades
+
+couts <- seqsubm(seq, 
+                 method="CONSTANT", 
+                 cval=2)
+
+dissim <- seqdist(seq, 
+                  method="OM", 
+                  sm=couts, 
+                  indel=1.5,
+                  full.matrix = TRUE)
+
+# aplicando PCA
+mds <- cmdscale(dissim, k=2)  # Redução para 2 dimensões
+
+mds_df_kmeans <- as.data.frame(mds)
+
+colnames(mds_df_kmeans) <- c("Dim1", 
+                             "Dim2")
+
+
+```
+
+```{r}
+silhoutte_3 <- fviz_nbclust(
+  mds_df_kmeans,
+  kmeans,
+  method = "silhouette",
+  k.max = 7)
+
+ggsave(filename = "silhoutte_3.png",
+       plot = silhoutte_3,
+       width = 8,
+       height = 6,
+       dpi = 300)
+```
+
+```{r}
+#Aplicando clustering k-means
+set.seed(123) 
+mds_df_kmeans$sequencia_id <- 1:nrow(mds_df_kmeans)
+
+
+kmeans_result <- kmeans(mds_df_kmeans[, c("Dim1", "Dim2")], 
+                        centers=3) 
+
+# 5. Adicione os resultados do cluster ao data frame
+mds_df_kmeans$cluster <- as.factor(kmeans_result$cluster)
+
+
+ggplot(mds_df_kmeans, aes(x=Dim1, 
+                          y=Dim2, 
+                          color=cluster)) +
+  geom_point(size=3) +
+  geom_label(aes(label=sequencia_id), 
+             vjust=-1, 
+             hjust=0.5, 
+             size=3) +  
+  labs(title="Gráfico de Dispersão com 3 Clusters", 
+       x="Dimensão 1", 
+       y="Dimensão 2") +
+  theme_minimal()
+
+windowsFonts(Times = windowsFont("Times New Roman"))
+
+par(family = "Times")
+
+indice_cluster <- seqIplot(seq, 
+    group = kmeans_result$cluster,
+    border = NA, 
+    yaxis = FALSE,
+    use.layout = TRUE,
+    legend.prop = 0.15,
+    ylab = c("1.265 seq. (21,1%)", "3.267 seq. (55,4%)", "1.468 seq. (24,5%)"),
+    main = c("Intermitente", "Persistente", "Necessidade"))
+
+indice_cluster
+```
+
+```{r}
+base_cluster_3 <- cbind(seq, 
+                   amostra1$id_seq, 
+                   amostra1$id,
+                   mds_df_kmeans$cluster) %>%
+  rename(id_sequenciamento = `amostra1$id_seq`,
+         id = `amostra1$id`,
+         cluster = `mds_df_kmeans$cluster`)  |> 
+  mutate(cluster = as.character(cluster),
+         cluster = case_when(cluster == "1" ~ "Transitório",
+                              cluster == "2" ~ "Persistente",
+                              cluster == "3" ~ "Precarizado"))
+```
+
+```{r}
+png("indice_cluster_amostra3.png", width = 1500, height = 1200, res = 200) # largura, altura e resolução
+windowsFonts(Times = windowsFont("Times New Roman"))
+par(family = "Times")
+indice_cluster <- seqIplot(seq, 
+    group = kmeans_result$cluster,
+    border = NA, 
+    ltext = c("Empregado do setor privado", "Fora da força de trabalho ou desocupado", "Trabalhador por conta própria"),
+    yaxis = FALSE,
+    use.layout = TRUE,
+    legend.prop = 0.15,
+    ylab = c("1.265 seq. (21,1%)", "3.267 seq. (55,4%)", "1.468 seq. (24,5%)"),
+    main = c("Intermitente", "Persistente", "Necessidade"))
+dev.off() # fecha o dispositivo gráfico
+```
+
+## 1.9. Testando diferenças entre as amostras
+
+```{r}
+
+amostras_teste <- bind_rows("amostra1" = base_cluster |>  select(cluster),
+                            "amostra2" = base_cluster_2 |>  select(cluster),
+                            "amostra3" = base_cluster_3 |>  select(cluster),
+                            .id = "amostra")
+
+tabela_quiquadrado <- table(amostras_teste$amostra,
+                            amostras_teste$cluster)
+
+teste <- chisq.test(tabela_quiquadrado)
+
+teste$stdres
+teste
 ```
